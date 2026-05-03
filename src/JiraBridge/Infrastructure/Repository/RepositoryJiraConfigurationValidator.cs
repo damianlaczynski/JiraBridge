@@ -19,22 +19,22 @@ public static class RepositoryJiraConfigurationValidator
 
     if (string.IsNullOrWhiteSpace(configuration.ProjectId))
     {
-      issues.Add(new ValidationIssue(configPath, "Jira metadata cache is missing 'projectId'. Re-run 'jirabridge configure <jira-project-key>'."));
+      issues.Add(new ValidationIssue(configPath, "Jira metadata cache is missing 'projectId'. Re-run configure from the JiraBridge home screen."));
     }
 
     if (configuration.IssueTypes.Count == 0)
     {
-      issues.Add(new ValidationIssue(configPath, "Jira metadata cache does not contain any issue types. Re-run 'jirabridge configure <jira-project-key>'."));
+      issues.Add(new ValidationIssue(configPath, "Jira metadata cache does not contain any issue types. Re-run configure from the JiraBridge home screen."));
     }
 
     if (configuration.LinkTypes.Count == 0)
     {
-      issues.Add(new ValidationIssue(configPath, "Jira metadata cache does not contain any link types. Re-run 'jirabridge configure <jira-project-key>'."));
+      issues.Add(new ValidationIssue(configPath, "Jira metadata cache does not contain any link types. Re-run configure from the JiraBridge home screen."));
     }
 
     if (configuration.IssueTypeStatuses.Count == 0)
     {
-      issues.Add(new ValidationIssue(configPath, "Jira metadata cache does not contain any issue type statuses. Re-run 'jirabridge configure <jira-project-key>'."));
+      issues.Add(new ValidationIssue(configPath, "Jira metadata cache does not contain any issue type statuses. Re-run configure from the JiraBridge home screen."));
     }
 
     foreach (JiraProjectIssueType issueType in configuration.IssueTypes)
@@ -47,7 +47,7 @@ public static class RepositoryJiraConfigurationValidator
       {
         issues.Add(new ValidationIssue(
           configPath,
-          $"Jira issue type '{issueType.Name}' does not have associated statuses in the local metadata cache. Re-run 'jirabridge configure <jira-project-key>'."));
+          $"Jira issue type '{issueType.Name}' does not have associated statuses in the local metadata cache. Re-run configure from the JiraBridge home screen."));
       }
     }
 

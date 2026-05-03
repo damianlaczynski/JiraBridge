@@ -60,6 +60,8 @@ public sealed class RepositoryBootstrapper(
 
     File.WriteAllText(
       path,
+      "# Create API token: https://id.atlassian.com/manage-profile/security/api-tokens" + System.Environment.NewLine +
+      "# Docs: https://github.com/DamianLaczynski/JiraBridge/blob/main/docs/user-guide.md#how-to-get-a-jira-api-token" + System.Environment.NewLine +
       "JIRABRIDGE_JIRA_BASE_URL=https://your-company.atlassian.net" + System.Environment.NewLine +
       "JIRABRIDGE_JIRA_EMAIL=your.email@company.com" + System.Environment.NewLine +
       "JIRABRIDGE_JIRA_API_TOKEN=your_api_token" + System.Environment.NewLine,

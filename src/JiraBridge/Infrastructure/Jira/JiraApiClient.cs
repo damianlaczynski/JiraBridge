@@ -627,15 +627,8 @@ public sealed class JiraApiClient : IDisposable
     return ParseSprintValue(sprintElement);
   }
 
-  private static JiraSprintInfo? ParseSprintValue(JsonElement element)
-  {
-    return element.ValueKind switch
-    {
-      JsonValueKind.Object => ParseSprintObject(element),
-      JsonValueKind.String => ParseSprintLegacyString(element.GetString()),
-      _ => null
-    };
-  }
+  private static JiraSprintInfo? ParseSprintValue(JsonElement element) =>
+    element.ValueKind == JsonValueKind.Object ? ParseSprintObject(element) : null;
 
   private static JiraSprintInfo? ParseSprintObject(JsonElement element)
   {
@@ -651,26 +644,6 @@ public sealed class JiraApiClient : IDisposable
     string state = element.TryGetProperty("state", out JsonElement stateElement) ? stateElement.GetString() ?? string.Empty : string.Empty;
 
     return new JiraSprintInfo(sprintId, name, state, boardId);
-  }
-
-  private static JiraSprintInfo? ParseSprintLegacyString(string? value)
-  {
-    if (string.IsNullOrWhiteSpace(value))
-    {
-      return null;
-    }
-
-    int id = ExtractLegacySprintInt(value, "id");
-    if (id <= 0)
-    {
-      return null;
-    }
-
-    return new JiraSprintInfo(
-      id,
-      ExtractLegacySprintString(value, "name"),
-      ExtractLegacySprintString(value, "state"),
-      ExtractLegacySprintInt(value, "rapidViewId"));
   }
 
   private static DateTimeOffset ParseUpdatedAt(JsonElement fields)
@@ -727,31 +700,6 @@ public sealed class JiraApiClient : IDisposable
     return string.IsNullOrWhiteSpace(sprintFieldId)
       ? baseFields
       : [.. baseFields, sprintFieldId];
-  }
-
-  private static string ExtractLegacySprintString(string value, string key)
-  {
-    string marker = $"{key}=";
-    int startIndex = value.IndexOf(marker, StringComparison.OrdinalIgnoreCase);
-    if (startIndex < 0)
-    {
-      return string.Empty;
-    }
-
-    startIndex += marker.Length;
-    int endIndex = value.IndexOfAny([',', ']'], startIndex);
-    if (endIndex < 0)
-    {
-      endIndex = value.Length;
-    }
-
-    return value[startIndex..endIndex].Trim();
-  }
-
-  private static int ExtractLegacySprintInt(string value, string key)
-  {
-    string parsed = ExtractLegacySprintString(value, key);
-    return int.TryParse(parsed, out int number) ? number : 0;
   }
 
   private static async Task EnsureSuccessAsync(HttpResponseMessage response, string operation, CancellationToken cancellationToken)

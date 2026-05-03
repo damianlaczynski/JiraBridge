@@ -1,32 +1,36 @@
 # JiraBridge
 
-JiraBridge is a .NET interactive CLI for synchronizing a repository backlog with Jira. The app now runs as a single-project interactive terminal application with explicit boundaries between host flow, screens, application orchestration, domain rules, and infrastructure adapters.
+Interactive .NET CLI that synchronizes a **Git repository’s markdown backlog** with **Jira** (pull/push, validation, conflicts). The UI is keyboard-driven: command palette, screens per workflow, and explicit dry-run for pushes.
 
-## Current Capabilities
+## Prerequisites
 
-- interactive command home screen with filterable command palette
-- repository `configure` flow with Jira metadata refresh
-- local `validate`
-- optional sprint-aware backlog tree controlled by `SprintMappingEnabled` in `.jirabridge/settings.json`
-- `push` with interactive dry-run preview and step-by-step progress feedback
-- `pull` from Jira into repository artifacts
-- conflict listing, full diff inspection, and interactive resolve strategies
-- smoke-style fixture coverage for nested backlog hierarchies and multi-level relationships
+- **Git**: Run inside a clone; the tool resolves the repo root by walking up to a `.git` directory.
+- **.NET**: Matches the app target (`net10.0` today). For the global tool, install a compatible .NET SDK/runtime as required by the shipped package.
+- **Terminal**: Interactive stdin is required. If stdin is redirected, the app renders once and exits (no unattended/CI mode yet).
 
-## Current Structure
+## Install
 
-- `src/JiraBridge` - single application project
-- `src/JiraBridge/Host` - startup, terminal loop, rendering, and progress state
-- `src/JiraBridge/Navigation` - menu and command suggestion flow
-- `src/JiraBridge/Screens` - user-facing screens and view models
-- `src/JiraBridge/Application` - use-case orchestration
-- `src/JiraBridge/Domain` - repository layout and sync domain types
-- `src/JiraBridge/Infrastructure` - repository, Jira, parsing, and sync adapters
-- `tests/JiraBridge.UnitTests` - unit and smoke-style fixture tests
+### From NuGet (recommended after publish)
 
-## Commands
+```powershell
+dotnet tool install --global JiraBridge
+```
 
-Run from the repository root:
+Command name: **`jirabridge`**.
+
+Update:
+
+```powershell
+dotnet tool update --global JiraBridge
+```
+
+### From a local `.nupkg` (pre-release testing)
+
+```powershell
+dotnet tool install --global JiraBridge --add-source C:\path\to\folder\containing\nupkg
+```
+
+### From source (contributors)
 
 ```powershell
 dotnet build JiraBridge.sln
@@ -34,24 +38,81 @@ dotnet run --project src/JiraBridge
 dotnet test tests/JiraBridge.UnitTests
 ```
 
-## Interactive Surface
+## Quick start
 
-- `configure`
-- `validate`
-- `push`
-- `pull`
-- `conflicts`
-- `resolve`
+1. `cd` into your Git repository.
+2. Create `.env` in the **repository root** (see [Environment](#environment)). You can copy `.env.example` and fill in real values. Do **not** commit secrets.
+3. Run `jirabridge`.
+4. Choose **`configure`**, enter your **Jira project key** (e.g. `SCRUM`), confirm. This writes `.jirabridge/settings.json`, prepares the backlog folder, and refreshes Jira metadata cache.
+5. Use **`pull`** / **`push`** / **`validate`** as needed. Use **`push`** dry-run before applying changes.
 
-The interactive app in `src/` is now the only maintained command surface in this repository.
+Full scenarios, troubleshooting, and `settings.json` fields: **[docs/user-guide.md](docs/user-guide.md)**.
 
-## Documentation
+## Environment
 
-- `docs/repo-map.md` - where code lives and which folder owns what
-- `docs/backend-coding-guidelines.md` - conventions for the interactive CLI solution
-- `docs/testing-playbook.md` - how to verify CLI and migration work
-- `AGENTS.md` - fast-start guide for contributors and AI agents
+Required variables (system environment or repo-root `.env`; `.env` does not override variables already set in the process):
+
+| Variable | Description |
+|----------|-------------|
+| `JIRABRIDGE_JIRA_BASE_URL` | HTTPS base URL, e.g. `https://your-domain.atlassian.net` |
+| `JIRABRIDGE_JIRA_EMAIL` | Atlassian account email |
+| `JIRABRIDGE_JIRA_API_TOKEN` | Atlassian API token (not your password) |
+
+**Getting a token:** In [Atlassian account security](https://id.atlassian.com/manage-profile/security/api-tokens), create an API token and paste it into `JIRABRIDGE_JIRA_API_TOKEN`. Step-by-step notes and links: **[docs/user-guide.md](docs/user-guide.md#how-to-get-a-jira-api-token)**.
+
+On first **configure**, `.env.example` is created in the repo root if missing.
+
+## Commands (interactive home screen)
+
+Filter with the keyboard; **Enter** runs or opens a screen; **Esc** / **Q** as shown on the home screen.
+
+| Command | Purpose |
+|---------|---------|
+| `configure` | Save repo settings, backlog layout, refresh cached Jira metadata |
+| `validate` | Validate local backlog artifacts |
+| `push` | Push local changes to Jira (dry-run or apply; arrows / Tab) |
+| `push-issue` | Push a single linked issue by key (dry-run or apply) |
+| `pull` | Pull Jira changes into the repository |
+| `pull-issue` | Pull a single issue by key |
+| `conflicts` | List sync conflicts |
+| `resolve` | Resolve selected conflict (repository / Jira / merge strategies) |
+
+There is **no** separate non-interactive CLI for these verbs today; the maintained surface is this interactive app.
+
+## Repository layout (defaults)
+
+- Settings: `.jirabridge/settings.json`
+- Metadata cache: `.jirabridge/project-metadata.json` (path configurable in settings)
+- Conflicts store: `.jirabridge/conflicts.json`
+- Default backlog root: `docs/jira-bridge`
+
+## Capabilities (summary)
+
+- Interactive home with filterable command palette  
+- Configure flow with Jira metadata refresh  
+- Local validation  
+- Optional sprint-aware backlog tree (`SprintMappingEnabled` in settings)  
+- Push with dry-run and step-by-step progress  
+- Pull from Jira into repo artifacts  
+- Conflict listing, diff preview, interactive resolve strategies  
+- Tests: parser, domain defaults, fixture-style backlog scenarios  
+
+## Distribution choice
+
+**Recommended:** publish **`JiraBridge`** as a **.NET global tool** on **[NuGet.org](https://www.nuget.org/)** (`PackAsTool`, command `jirabridge`). Same package works on Windows, Linux, and macOS with a suitable .NET runtime.
+
+**Alternatives:** private NuGet feed, GitHub Releases attaching `.nupkg`, or documentation-only install-from-source. Container images are optional and not required for a CLI tool.
+
+## Documentation map
+
+| Doc | Audience |
+|-----|----------|
+| [docs/user-guide.md](docs/user-guide.md) | End users: install, env, workflows, troubleshooting |
+| [AGENTS.md](AGENTS.md) | Contributors & AI agents: build commands, layout |
+| [docs/repo-map.md](docs/repo-map.md) | Where code lives |
+| [docs/backend-coding-guidelines.md](docs/backend-coding-guidelines.md) | Implementation conventions |
+| [docs/testing-playbook.md](docs/testing-playbook.md) | How to test |
 
 ## License
 
-This project is licensed under the MIT License. See [`LICENSE`](LICENSE) for details.
+MIT — see [LICENSE](LICENSE).

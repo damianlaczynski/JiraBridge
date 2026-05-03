@@ -10,6 +10,7 @@
 
 ## Start here by task
 
+- End-user install and workflows: read `docs/user-guide.md` and root `README.md`.
 - CLI or application change: read `docs/repo-map.md` and `docs/backend-coding-guidelines.md`.
 - Test work or migration verification: read `docs/testing-playbook.md`.
 

@@ -6,7 +6,6 @@ namespace JiraBridge.Infrastructure.Storage;
 public static partial class SprintPathConvention
 {
   public const string BacklogBucketSegment = "backlog";
-  private const string LegacySprintsDirectoryName = "sprints";
   private const string SprintDirectoryPrefix = "sprint-";
 
   public static string BuildPlacementDirectory(string backlogRoot, JiraSprintInfo? sprint, bool sprintMappingEnabled)
@@ -88,15 +87,6 @@ public static partial class SprintPathConvention
       return segments[0];
     }
 
-    for (int index = 0; index < segments.Length - 1; index++)
-    {
-      if (string.Equals(segments[index], LegacySprintsDirectoryName, StringComparison.OrdinalIgnoreCase) &&
-          segments[index + 1].StartsWith(SprintDirectoryPrefix, StringComparison.OrdinalIgnoreCase))
-      {
-        return segments[index + 1];
-      }
-    }
-
     return null;
   }
 
@@ -105,15 +95,6 @@ public static partial class SprintPathConvention
     string[] segments = artifactPath.Split(
       [Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar],
       StringSplitOptions.RemoveEmptyEntries);
-
-    for (int index = 0; index < segments.Length - 1; index++)
-    {
-      if (string.Equals(segments[index], LegacySprintsDirectoryName, StringComparison.OrdinalIgnoreCase) &&
-          segments[index + 1].StartsWith(SprintDirectoryPrefix, StringComparison.OrdinalIgnoreCase))
-      {
-        return segments[index + 1];
-      }
-    }
 
     foreach (string segment in segments)
     {

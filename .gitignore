@@ -98,6 +98,9 @@ TestResults/
 *.sqlite
 *.sqlite3
 
+# Secrets (do not commit tokens)
+.env
+
 # JiraBridge
 .jirabridge/
 docs/jira-bridge/

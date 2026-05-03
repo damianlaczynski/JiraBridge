@@ -17,7 +17,7 @@ public static class RepositoryJiraConfigurationStore
   public static RepositoryJiraConfiguration? TryLoad(string repoRoot, RepositorySettings settings, out string? error)
   {
     error = null;
-    string resolvedPath = ResolveMetadataFilePath(repoRoot, settings.MetadataFile);
+    string resolvedPath = PathResolver.ResolveRepoRelativePath(repoRoot, settings.MetadataFile);
 
     if (!File.Exists(resolvedPath))
     {
@@ -45,26 +45,6 @@ public static class RepositoryJiraConfigurationStore
       error = $"Could not read project metadata '{Path.GetRelativePath(repoRoot, resolvedPath)}': {ex.Message}";
       return null;
     }
-  }
-
-  private static string ResolveMetadataFilePath(string repoRoot, string metadataFileRelative)
-  {
-    string primary = PathResolver.ResolveRepoRelativePath(repoRoot, metadataFileRelative);
-    if (File.Exists(primary))
-    {
-      return primary;
-    }
-
-    string? dir = Path.GetDirectoryName(primary);
-    if (string.IsNullOrWhiteSpace(dir))
-    {
-      return primary;
-    }
-
-    string legacy = Path.Combine(dir, "jira-project.json");
-    return File.Exists(legacy)
-      ? legacy
-      : primary;
   }
 
   public static void Save(string repoRoot, RepositorySettings settings, RepositoryJiraConfiguration configuration)

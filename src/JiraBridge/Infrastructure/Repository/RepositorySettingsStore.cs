@@ -5,9 +5,6 @@ namespace JiraBridge.Infrastructure.Repository;
 
 public static class RepositorySettingsStore
 {
-  private const string SettingsFileName = "settings.json";
-  private const string LegacySettingsFileName = ".jirabridge.json";
-
   private static readonly JsonSerializerOptions JsonOptions = new()
   {
     PropertyNameCaseInsensitive = true,
@@ -28,26 +25,25 @@ public static class RepositorySettingsStore
   public static RepositorySettings? TryLoad(string repoRoot, out string? error)
   {
     string path = GetPath(repoRoot);
-    string legacyPath = PathResolver.ResolveRepoRelativePath(repoRoot, LegacySettingsFileName);
     error = null;
 
-    if (!File.Exists(path) && !File.Exists(legacyPath))
+    if (!File.Exists(path))
     {
-      error = $"Missing repository settings: {Path.GetRelativePath(repoRoot, path)}. Run 'jirabridge configure <jira-project-key>'.";
+      error =
+        $"Missing repository settings: {Path.GetRelativePath(repoRoot, path)}. " +
+        "Start JiraBridge from this repository and run configure from the home screen.";
       return null;
     }
-
-    string filePath = File.Exists(path) ? path : legacyPath;
 
     try
     {
       RepositorySettings? settings = JsonSerializer.Deserialize<RepositorySettings>(
-        File.ReadAllText(filePath),
+        File.ReadAllText(path),
         JsonOptions);
 
       if (settings is null)
       {
-        error = $"Could not deserialize repository settings: {Path.GetRelativePath(repoRoot, filePath)}.";
+        error = $"Could not deserialize repository settings: {Path.GetRelativePath(repoRoot, path)}.";
         return null;
       }
 
@@ -55,7 +51,7 @@ public static class RepositorySettingsStore
     }
     catch (Exception ex)
     {
-      error = $"Could not read repository settings '{Path.GetRelativePath(repoRoot, filePath)}': {ex.Message}";
+      error = $"Could not read repository settings '{Path.GetRelativePath(repoRoot, path)}': {ex.Message}";
       return null;
     }
   }
