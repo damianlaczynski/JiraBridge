@@ -1,4 +1,4 @@
-using System.Text.Json;
+using JiraBridge.Application.Common;
 using JiraBridge.Domain.Configuration;
 using JiraBridge.Infrastructure.Repository;
 using JiraBridge.UnitTests.Support;
@@ -10,7 +10,7 @@ namespace JiraBridge.UnitTests.Infrastructure;
 public sealed class BacklogValidatorTests
 {
   [Fact]
-  public async Task ValidateAsync_WhenJiraRefreshFails_UsesLocalCacheAndReturnsWarning()
+  public async Task ValidateAsync_WhenJiraRefreshFails_ReturnsFailure()
   {
     string repoRoot = CreateRepositoryWithValidArtifact();
     using var scope = new TestProcessScope(
@@ -22,11 +22,10 @@ public sealed class BacklogValidatorTests
     var validator = new BacklogValidator(new FakeRepositoryMetadataRefresher((_, _, _) =>
       throw new InvalidOperationException("jira unavailable")));
 
-    var result = await validator.ValidateAsync(CancellationToken.None);
+    CommandResult result = await validator.ValidateAsync(CancellationToken.None);
 
-    Assert.True(result.Success);
-    Assert.NotNull(result.Details);
-    Assert.Contains(result.Details!, detail => detail.Contains("falling back to the local cache", StringComparison.OrdinalIgnoreCase));
+    Assert.False(result.Success);
+    Assert.Contains("Could not load current project metadata", result.Message ?? string.Empty, StringComparison.OrdinalIgnoreCase);
   }
 
   private static string CreateRepositoryWithValidArtifact()
@@ -35,7 +34,7 @@ public sealed class BacklogValidatorTests
     Directory.CreateDirectory(repoRoot);
     Directory.CreateDirectory(Path.Combine(repoRoot, ".git"));
     Directory.CreateDirectory(Path.Combine(repoRoot, ".jirabridge"));
-    Directory.CreateDirectory(Path.Combine(repoRoot, "project-docs", "backlog", "story"));
+    Directory.CreateDirectory(Path.Combine(repoRoot, "docs", "jira-bridge", "backlog"));
     RepositorySettingsStore.Save(repoRoot, RepositorySettingsStore.CreateDefault("SCRUM"));
 
     var metadata = new RepositoryJiraConfiguration(
@@ -55,7 +54,7 @@ public sealed class BacklogValidatorTests
     RepositoryJiraConfigurationStore.Save(repoRoot, RepositorySettingsStore.CreateDefault("SCRUM"), metadata);
 
     File.WriteAllText(
-      Path.Combine(repoRoot, "project-docs", "backlog", "story", "sample.md"),
+      Path.Combine(repoRoot, "docs", "jira-bridge", "backlog", "sample.md"),
       """
       # Sample story
 

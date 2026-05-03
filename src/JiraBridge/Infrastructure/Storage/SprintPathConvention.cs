@@ -5,18 +5,18 @@ namespace JiraBridge.Infrastructure.Storage;
 
 public static partial class SprintPathConvention
 {
-  private const string SprintsDirectoryName = "sprints";
+  public const string BacklogBucketSegment = "backlog";
+  private const string LegacySprintsDirectoryName = "sprints";
   private const string SprintDirectoryPrefix = "sprint-";
 
-  public static string BuildRootDirectory(string backlogRoot, string issueType, JiraSprintInfo? sprint)
+  public static string BuildPlacementDirectory(string backlogRoot, JiraSprintInfo? sprint, bool sprintMappingEnabled)
   {
-    string issueTypeDirectory = Slugify(issueType);
-    if (sprint is null)
+    if (!sprintMappingEnabled || sprint is null)
     {
-      return Path.Combine(backlogRoot, issueTypeDirectory);
+      return Path.Combine(backlogRoot, BacklogBucketSegment);
     }
 
-    return Path.Combine(backlogRoot, SprintsDirectoryName, ToSprintDirectoryName(sprint.Name), issueTypeDirectory);
+    return Path.Combine(backlogRoot, ToSprintDirectoryName(sprint.Name));
   }
 
   public static JiraSprintInfo? ResolveSprintForArtifact(
@@ -29,7 +29,7 @@ public static partial class SprintPathConvention
       return null;
     }
 
-    string? sprintDirectoryName = TryGetSprintDirectoryName(artifactPath, backlogRoot);
+    string? sprintDirectoryName = TryExtractSprintDirectorySegment(artifactPath, backlogRoot);
     if (string.IsNullOrWhiteSpace(sprintDirectoryName))
     {
       return null;
@@ -39,15 +39,58 @@ public static partial class SprintPathConvention
       string.Equals(ToSprintDirectoryName(sprint.Name), sprintDirectoryName, StringComparison.OrdinalIgnoreCase));
   }
 
-  public static string? TryExtractSprintDirectoryNameFromPath(string artifactPath)
+  public static string? TryExtractSprintDirectorySegment(string artifactPath, string? backlogRoot)
   {
-    string[] segments = artifactPath.Split(
+    if (!string.IsNullOrWhiteSpace(backlogRoot))
+    {
+      try
+      {
+        string relative = Path.GetRelativePath(Path.GetFullPath(backlogRoot), Path.GetFullPath(artifactPath));
+        if (!relative.StartsWith("..", StringComparison.Ordinal) &&
+            !Path.IsPathRooted(relative))
+        {
+          string? fromRelative = ExtractSprintFromRelativePath(relative);
+          if (fromRelative is not null)
+          {
+            return fromRelative;
+          }
+        }
+      }
+      catch (ArgumentException)
+      {
+      }
+    }
+
+    return ExtractSprintFromAnyPath(artifactPath);
+  }
+
+  public static string ToSprintDirectoryName(string sprintName) =>
+    $"{SprintDirectoryPrefix}{Slugify(sprintName)}";
+
+  private static string? ExtractSprintFromRelativePath(string relativePath)
+  {
+    string[] segments = relativePath.Split(
       [Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar],
       StringSplitOptions.RemoveEmptyEntries);
 
+    if (segments.Length == 0)
+    {
+      return null;
+    }
+
+    if (string.Equals(segments[0], BacklogBucketSegment, StringComparison.OrdinalIgnoreCase))
+    {
+      return null;
+    }
+
+    if (segments[0].StartsWith(SprintDirectoryPrefix, StringComparison.OrdinalIgnoreCase))
+    {
+      return segments[0];
+    }
+
     for (int index = 0; index < segments.Length - 1; index++)
     {
-      if (string.Equals(segments[index], SprintsDirectoryName, StringComparison.OrdinalIgnoreCase) &&
+      if (string.Equals(segments[index], LegacySprintsDirectoryName, StringComparison.OrdinalIgnoreCase) &&
           segments[index + 1].StartsWith(SprintDirectoryPrefix, StringComparison.OrdinalIgnoreCase))
       {
         return segments[index + 1];
@@ -57,13 +100,31 @@ public static partial class SprintPathConvention
     return null;
   }
 
-  public static string ToSprintDirectoryName(string sprintName) =>
-    $"{SprintDirectoryPrefix}{Slugify(sprintName)}";
-
-  private static string? TryGetSprintDirectoryName(string artifactPath, string backlogRoot)
+  private static string? ExtractSprintFromAnyPath(string artifactPath)
   {
-    string relativePath = Path.GetRelativePath(backlogRoot, artifactPath);
-    return TryExtractSprintDirectoryNameFromPath(relativePath);
+    string[] segments = artifactPath.Split(
+      [Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar],
+      StringSplitOptions.RemoveEmptyEntries);
+
+    for (int index = 0; index < segments.Length - 1; index++)
+    {
+      if (string.Equals(segments[index], LegacySprintsDirectoryName, StringComparison.OrdinalIgnoreCase) &&
+          segments[index + 1].StartsWith(SprintDirectoryPrefix, StringComparison.OrdinalIgnoreCase))
+      {
+        return segments[index + 1];
+      }
+    }
+
+    foreach (string segment in segments)
+    {
+      if (segment.StartsWith(SprintDirectoryPrefix, StringComparison.OrdinalIgnoreCase) &&
+          !string.Equals(segment, BacklogBucketSegment, StringComparison.OrdinalIgnoreCase))
+      {
+        return segment;
+      }
+    }
+
+    return null;
   }
 
   private static string Slugify(string value)

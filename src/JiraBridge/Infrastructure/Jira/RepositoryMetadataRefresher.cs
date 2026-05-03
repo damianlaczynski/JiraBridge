@@ -9,11 +9,6 @@ public sealed class RepositoryMetadataRefresher(
   IJiraApiClientFactory jiraApiClientFactory,
   IOperationProgressSink progressSink) : IRepositoryMetadataRefresher
 {
-  public static bool ShouldRefreshSprintProjection(
-    RepositorySettings repositorySettings,
-    RepositoryJiraConfiguration configuration) =>
-    repositorySettings.SprintMappingEnabled && !configuration.SprintProjectionCached;
-
   public async Task<RepositoryJiraConfiguration> RefreshAsync(
     string repoRoot,
     RepositorySettings repositorySettings,
@@ -50,8 +45,7 @@ public sealed class RepositoryMetadataRefresher(
       LinkTypes: linkTypes.ToList(),
       IssueTypeStatuses: issueTypeStatuses.ToList(),
       SprintFieldId: sprintFieldId,
-      Sprints: sprints,
-      SprintProjectionCached: repositorySettings.SprintMappingEnabled);
+      Sprints: sprints);
 
     RepositoryJiraConfigurationStore.Save(repoRoot, repositorySettings, configuration);
     return configuration;

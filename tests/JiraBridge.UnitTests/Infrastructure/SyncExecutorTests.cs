@@ -50,12 +50,12 @@ public sealed class SyncExecutorTests
           "isLast":true
         }
         """);
-    })), UnexpectedMetadataRefresh(), new OperationProgressTracker());
+    })), new LocalFixtureMetadataRefresher(), new OperationProgressTracker());
 
     CommandResult result = await executor.PullAsync(CancellationToken.None);
 
     Assert.True(result.Success);
-    string importedPath = Path.Combine(repoRoot, "project-docs", "backlog", "story", "scrum-10-imported-story.md");
+    string importedPath = Path.Combine(repoRoot, "docs", "jira-bridge", "backlog", "SCRUM-10", "SCRUM-10.md");
     Assert.True(File.Exists(importedPath));
     string importedContent = File.ReadAllText(importedPath);
     Assert.Contains("# Imported story", importedContent);
@@ -71,7 +71,7 @@ public sealed class SyncExecutorTests
     PrepareRepository(repoRoot);
     string artifactPath = CreateArtifact(
       repoRoot,
-      "story.md",
+      Path.Combine("backlog", "SCRUM-2", "SCRUM-2.md"),
       """
       # Existing story
 
@@ -122,7 +122,7 @@ public sealed class SyncExecutorTests
           "isLast":true
         }
         """);
-    })), UnexpectedMetadataRefresh(), new OperationProgressTracker());
+    })), new LocalFixtureMetadataRefresher(), new OperationProgressTracker());
 
     CommandResult result = await executor.PullAsync(CancellationToken.None);
 
@@ -140,7 +140,7 @@ public sealed class SyncExecutorTests
     string repoRoot = CreateRepositoryRoot();
     PrepareRepository(
       repoRoot,
-      new RepositorySettings(1, "SCRUM", "project-docs/backlog", ".jirabridge/jira-project.json", SprintMappingEnabled: true),
+      new RepositorySettings(1, "SCRUM", "docs/jira-bridge", ".jirabridge/project-metadata.json", SprintMappingEnabled: true),
       new RepositoryJiraConfiguration(
         "SCRUM",
         "100",
@@ -150,8 +150,7 @@ public sealed class SyncExecutorTests
         [],
         [],
         SprintFieldId: "customfield_10020",
-        Sprints: [new JiraSprintInfo(24, "Sprint 24", "active", 7)],
-        SprintProjectionCached: true));
+        Sprints: [new JiraSprintInfo(24, "Sprint 24", "active", 7)]));
     using var scope = CreateScope(repoRoot);
 
     var executor = new SyncExecutor(new StubJiraApiClientFactory(new StubHttpMessageHandler((request, _) =>
@@ -178,12 +177,12 @@ public sealed class SyncExecutorTests
           "isLast":true
         }
         """);
-    })), UnexpectedMetadataRefresh(), new OperationProgressTracker());
+    })), new LocalFixtureMetadataRefresher(), new OperationProgressTracker());
 
     CommandResult result = await executor.PullAsync(CancellationToken.None);
 
     Assert.True(result.Success);
-    string importedPath = Path.Combine(repoRoot, "project-docs", "backlog", "sprints", "sprint-sprint-24", "story", "scrum-10-imported-story.md");
+    string importedPath = Path.Combine(repoRoot, "docs", "jira-bridge", "sprint-sprint-24", "SCRUM-10", "SCRUM-10.md");
     Assert.True(File.Exists(importedPath));
   }
 
@@ -193,7 +192,7 @@ public sealed class SyncExecutorTests
     string repoRoot = CreateRepositoryRoot();
     PrepareRepository(
       repoRoot,
-      new RepositorySettings(1, "SCRUM", "project-docs/backlog", ".jirabridge/jira-project.json", SprintMappingEnabled: true),
+      new RepositorySettings(1, "SCRUM", "docs/jira-bridge", ".jirabridge/project-metadata.json", SprintMappingEnabled: true),
       new RepositoryJiraConfiguration(
         "SCRUM",
         "100",
@@ -203,12 +202,11 @@ public sealed class SyncExecutorTests
         [],
         [],
         SprintFieldId: "customfield_10020",
-        Sprints: [new JiraSprintInfo(24, "Sprint 24", "active", 7)],
-        SprintProjectionCached: true));
+        Sprints: [new JiraSprintInfo(24, "Sprint 24", "active", 7)]));
 
     string artifactPath = CreateArtifact(
       repoRoot,
-      "story.md",
+      Path.Combine("backlog", "story.md"),
       """
       # Existing story
 
@@ -257,23 +255,23 @@ public sealed class SyncExecutorTests
           ],
           "isLast":true
         }
-        """))), UnexpectedMetadataRefresh(), new OperationProgressTracker());
+        """))), new LocalFixtureMetadataRefresher(), new OperationProgressTracker());
 
     CommandResult result = await executor.PullAsync(CancellationToken.None);
 
     Assert.True(result.Success);
-    string movedPath = Path.Combine(repoRoot, "project-docs", "backlog", "sprints", "sprint-sprint-24", "story", "scrum-2-existing-story.md");
+    string movedPath = Path.Combine(repoRoot, "docs", "jira-bridge", "sprint-sprint-24", "SCRUM-2", "SCRUM-2.md");
     Assert.True(File.Exists(movedPath));
     Assert.False(File.Exists(artifactPath));
   }
 
   [Fact]
-  public async Task PushAsync_WhenSprintMappingEnabled_SendsSprintField()
+  public async Task PullAsync_WhenArtifactRelocated_RemovesEmptyKeyDirectories()
   {
     string repoRoot = CreateRepositoryRoot();
     PrepareRepository(
       repoRoot,
-      new RepositorySettings(1, "SCRUM", "project-docs/backlog", ".jirabridge/jira-project.json", SprintMappingEnabled: true),
+      new RepositorySettings(1, "SCRUM", "docs/jira-bridge", ".jirabridge/project-metadata.json", SprintMappingEnabled: true),
       new RepositoryJiraConfiguration(
         "SCRUM",
         "100",
@@ -283,12 +281,89 @@ public sealed class SyncExecutorTests
         [],
         [],
         SprintFieldId: "customfield_10020",
-        Sprints: [new JiraSprintInfo(24, "Sprint 24", "active", 7)],
-        SprintProjectionCached: true));
+        Sprints: [new JiraSprintInfo(24, "Sprint 24", "active", 7)]));
+
+    string oldKeyDirectory = Path.Combine(repoRoot, "docs", "jira-bridge", "backlog", "SCRUM-2");
+    string artifactPath = CreateArtifact(
+      repoRoot,
+      Path.Combine("backlog", "SCRUM-2", "SCRUM-2.md"),
+      """
+      # Existing story
+
+      ## Description
+
+      Existing body.
+
+      ## Links
+
+      - Parent: none
+
+      ## Relations
+
+      ### Relates
+
+      - none
+
+      ## Metadata
+
+      - Issue Type: Story
+      - Jira Issue Key: SCRUM-2
+      - Jira Last Synced Local Hash: B0B787AFB1D6B7F1FB1648B5A113D96F4C1A7A16B5E9B0B81967EB663D5C2F42
+      - Jira Last Synced Remote Hash: OLDREMOTE
+      """);
+    StampCurrentLocalHash(artifactPath, "SCRUM-2", "OLDREMOTE");
+
+    using var scope = CreateScope(repoRoot);
+
+    var executor = new SyncExecutor(new StubJiraApiClientFactory(new StubHttpMessageHandler((request, _) =>
+      StubHttpMessageHandler.Json(
+        """
+        {
+          "issues":[
+            {
+              "key":"SCRUM-2",
+              "fields":{
+                "summary":"Existing story",
+                "description":{"type":"doc","version":1,"content":[{"type":"paragraph","content":[{"type":"text","text":"Existing body."}]}]},
+                "issuetype":{"name":"Story"},
+                "status":{"name":"Done"},
+                "updated":"2026-05-01T10:15:00.000+0000",
+                "customfield_10020":{"id":24,"name":"Sprint 24","state":"active","boardId":7},
+                "issuelinks":[]
+              }
+            }
+          ],
+          "isLast":true
+        }
+        """))), new LocalFixtureMetadataRefresher(), new OperationProgressTracker());
+
+    CommandResult result = await executor.PullAsync(CancellationToken.None);
+
+    Assert.True(result.Success);
+    Assert.False(Directory.Exists(oldKeyDirectory));
+  }
+
+  [Fact]
+  public async Task PushAsync_WhenSprintMappingEnabled_SendsSprintField()
+  {
+    string repoRoot = CreateRepositoryRoot();
+    PrepareRepository(
+      repoRoot,
+      new RepositorySettings(1, "SCRUM", "docs/jira-bridge", ".jirabridge/project-metadata.json", SprintMappingEnabled: true),
+      new RepositoryJiraConfiguration(
+        "SCRUM",
+        "100",
+        "Scrum",
+        "https://example.atlassian.net",
+        [new JiraProjectIssueType("1", "Story", false)],
+        [],
+        [],
+        SprintFieldId: "customfield_10020",
+        Sprints: [new JiraSprintInfo(24, "Sprint 24", "active", 7)]));
 
     string artifactPath = CreateArtifact(
       repoRoot,
-      Path.Combine("sprints", "sprint-sprint-24", "story", "story.md"),
+      Path.Combine("sprint-sprint-24", "SCRUM-2", "SCRUM-2.md"),
       """
       # Updated locally
 
@@ -358,7 +433,7 @@ public sealed class SyncExecutorTests
         "/rest/api/3/issue/SCRUM-2" when request.Method == HttpMethod.Put => CaptureNoContent(request, captured => updateBody = captured),
         _ => new HttpResponseMessage(HttpStatusCode.NotFound) { Content = new StringContent("missing") }
       };
-    })), UnexpectedMetadataRefresh(), new OperationProgressTracker());
+    })), new LocalFixtureMetadataRefresher(), new OperationProgressTracker());
 
     CommandResult result = await executor.PushAsync(dryRun: false, CancellationToken.None);
 
@@ -374,7 +449,7 @@ public sealed class SyncExecutorTests
     PrepareRepository(repoRoot);
     string artifactPath = CreateArtifact(
       repoRoot,
-      "story.md",
+      Path.Combine("backlog", "story.md"),
       """
       # Local changed story
 
@@ -421,7 +496,7 @@ public sealed class SyncExecutorTests
           ],
           "isLast":true
         }
-        """))), UnexpectedMetadataRefresh(), new OperationProgressTracker());
+        """))), new LocalFixtureMetadataRefresher(), new OperationProgressTracker());
 
     CommandResult result = await executor.PullAsync(CancellationToken.None);
 
@@ -443,7 +518,7 @@ public sealed class SyncExecutorTests
     PrepareRepository(repoRoot);
     string artifactPath = CreateArtifact(
       repoRoot,
-      "new-story.md",
+      Path.Combine("backlog", "new-story.md"),
       """
       # New story
 
@@ -496,7 +571,7 @@ public sealed class SyncExecutorTests
           """),
         _ => new HttpResponseMessage(HttpStatusCode.NotFound) { Content = new StringContent("missing") }
       };
-    })), UnexpectedMetadataRefresh(), new OperationProgressTracker());
+    })), new LocalFixtureMetadataRefresher(), new OperationProgressTracker());
 
     CommandResult result = await executor.PushAsync(dryRun: false, CancellationToken.None);
 
@@ -516,7 +591,7 @@ public sealed class SyncExecutorTests
     PrepareRepository(repoRoot);
     string dependencyPath = CreateArtifact(
       repoRoot,
-      "dependency.md",
+      Path.Combine("backlog", "dependency.md"),
       """
       # Dependency
 
@@ -545,7 +620,7 @@ public sealed class SyncExecutorTests
 
     string storyPath = CreateArtifact(
       repoRoot,
-      "story.md",
+      Path.Combine("backlog", "story.md"),
       """
       # Updated locally
 
@@ -634,7 +709,7 @@ public sealed class SyncExecutorTests
           """),
         _ => new HttpResponseMessage(HttpStatusCode.NotFound) { Content = new StringContent("missing") }
       };
-    })), UnexpectedMetadataRefresh(), new OperationProgressTracker());
+    })), new LocalFixtureMetadataRefresher(), new OperationProgressTracker());
 
     CommandResult result = await executor.PushAsync(dryRun: false, CancellationToken.None);
 
@@ -655,7 +730,7 @@ public sealed class SyncExecutorTests
 
     string epicPath = CreateArtifact(
       repoRoot,
-      Path.Combine("epic", "scrum-1-platform.md"),
+      Path.Combine("backlog", "epic", "scrum-1-platform.md"),
       """
       # Platform epic
 
@@ -684,7 +759,7 @@ public sealed class SyncExecutorTests
 
     string dependencyPath = CreateArtifact(
       repoRoot,
-      Path.Combine("shared", "dependency.md"),
+      Path.Combine("backlog", "shared", "dependency.md"),
       """
       # Shared dependency
 
@@ -713,7 +788,7 @@ public sealed class SyncExecutorTests
 
     CreateArtifact(
       repoRoot,
-      Path.Combine("epic", "story", "new-story.md"),
+      Path.Combine("backlog", "epic", "story", "new-story.md"),
       """
       # New nested story
 
@@ -732,7 +807,7 @@ public sealed class SyncExecutorTests
 
       ### Blocks
 
-      - ../../../shared/dependency.md
+      - ../../shared/dependency.md
 
       ## Description
 
@@ -741,7 +816,7 @@ public sealed class SyncExecutorTests
 
     string taskPath = CreateArtifact(
       repoRoot,
-      Path.Combine("epic", "story", "tasks", "task.md"),
+      Path.Combine("backlog", "epic", "story", "tasks", "task.md"),
       """
       # Nested task
 
@@ -760,7 +835,7 @@ public sealed class SyncExecutorTests
 
       ### Relates
 
-      - ../../../../shared/dependency.md
+      - ../../../shared/dependency.md
 
       ## Description
 
@@ -809,7 +884,7 @@ public sealed class SyncExecutorTests
           """),
         _ => new HttpResponseMessage(HttpStatusCode.NotFound) { Content = new StringContent("missing") }
       };
-    })), UnexpectedMetadataRefresh(), new OperationProgressTracker());
+    })), new LocalFixtureMetadataRefresher(), new OperationProgressTracker());
 
     CommandResult result = await executor.PushAsync(dryRun: true, CancellationToken.None);
 
@@ -833,7 +908,7 @@ public sealed class SyncExecutorTests
 
     string epicPath = CreateArtifact(
       repoRoot,
-      Path.Combine("epic", "scrum-1-platform.md"),
+      Path.Combine("backlog", "epic", "scrum-1-platform.md"),
       """
       # Platform epic
 
@@ -852,7 +927,7 @@ public sealed class SyncExecutorTests
 
       ### Blocks
 
-      - ../../../shared/dependency.md
+      - ../shared/dependency.md
 
       ## Description
 
@@ -862,7 +937,7 @@ public sealed class SyncExecutorTests
 
     string dependencyPath = CreateArtifact(
       repoRoot,
-      Path.Combine("shared", "dependency.md"),
+      Path.Combine("backlog", "shared", "dependency.md"),
       """
       # Shared dependency
 
@@ -891,7 +966,7 @@ public sealed class SyncExecutorTests
 
     string storyPath = CreateArtifact(
       repoRoot,
-      Path.Combine("epic", "story", "new-story.md"),
+      Path.Combine("backlog", "epic", "story", "new-story.md"),
       """
       # New nested story
 
@@ -919,7 +994,7 @@ public sealed class SyncExecutorTests
 
     string taskPath = CreateArtifact(
       repoRoot,
-      Path.Combine("epic", "story", "tasks", "task.md"),
+      Path.Combine("backlog", "epic", "story", "tasks", "task.md"),
       """
       # Nested task
 
@@ -1026,7 +1101,7 @@ public sealed class SyncExecutorTests
         "/rest/api/3/issueLink" when request.Method == HttpMethod.Post => CaptureNoContent(request, captured => linkBody = captured),
         _ => new HttpResponseMessage(HttpStatusCode.NotFound) { Content = new StringContent("missing") }
       };
-    })), UnexpectedMetadataRefresh(), new OperationProgressTracker());
+    })), new LocalFixtureMetadataRefresher(), new OperationProgressTracker());
 
     CommandResult result = await executor.PushAsync(dryRun: false, CancellationToken.None);
 
@@ -1048,7 +1123,7 @@ public sealed class SyncExecutorTests
     PrepareRepository(repoRoot);
     string storyPath = CreateArtifact(
       repoRoot,
-      "story.md",
+      Path.Combine("backlog", "story.md"),
       """
       # Local push title
 
@@ -1102,7 +1177,7 @@ public sealed class SyncExecutorTests
           """),
         _ => new HttpResponseMessage(HttpStatusCode.NotFound) { Content = new StringContent("missing") }
       };
-    })), UnexpectedMetadataRefresh(), new OperationProgressTracker());
+    })), new LocalFixtureMetadataRefresher(), new OperationProgressTracker());
 
     CommandResult result = await executor.PushAsync(dryRun: false, CancellationToken.None);
 
@@ -1114,11 +1189,6 @@ public sealed class SyncExecutorTests
     Assert.Contains("Repository Description vs Jira Description", conflict.Details);
     Assert.Contains("Local push body.", File.ReadAllText(storyPath));
   }
-
-  private static IRepositoryMetadataRefresher UnexpectedMetadataRefresh() =>
-    new FakeRepositoryMetadataRefresher((_, _, _) =>
-      Task.FromException<RepositoryJiraConfiguration>(
-        new InvalidOperationException("Unexpected metadata refresh in unit test.")));
 
   private static TestProcessScope CreateScope(string repoRoot)
   {
@@ -1145,8 +1215,7 @@ public sealed class SyncExecutorTests
         "https://example.atlassian.net",
         [new JiraProjectIssueType("1", "Story", false)],
         [],
-        [],
-        SprintProjectionCached: true));
+        []));
   }
 
   private static void PrepareRepository(string repoRoot, RepositorySettings settings, RepositoryJiraConfiguration configuration)
@@ -1154,7 +1223,7 @@ public sealed class SyncExecutorTests
     RepositorySettingsStore.Save(repoRoot, settings);
     RepositoryJiraConfigurationStore.Save(repoRoot, settings, configuration);
 
-    Directory.CreateDirectory(Path.Combine(repoRoot, "project-docs", "backlog"));
+    Directory.CreateDirectory(Path.Combine(repoRoot, "docs", "jira-bridge"));
   }
 
   private static string CreateRepositoryRoot()
@@ -1165,9 +1234,9 @@ public sealed class SyncExecutorTests
     return repoRoot;
   }
 
-  private static string CreateArtifact(string repoRoot, string fileName, string content)
+  private static string CreateArtifact(string repoRoot, string relativePath, string content)
   {
-    string path = Path.Combine(repoRoot, "project-docs", "backlog", fileName);
+    string path = Path.Combine(repoRoot, "docs", "jira-bridge", relativePath);
     Directory.CreateDirectory(Path.GetDirectoryName(path)!);
     File.WriteAllText(path, content, Encoding.UTF8);
     return path;

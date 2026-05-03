@@ -9,8 +9,7 @@ public sealed record RepositoryJiraConfiguration(
   List<JiraLinkType> LinkTypes,
   List<JiraIssueTypeStatuses> IssueTypeStatuses,
   string? SprintFieldId = null,
-  List<JiraSprintInfo>? Sprints = null,
-  bool SprintProjectionCached = false);
+  List<JiraSprintInfo>? Sprints = null);
 
 public sealed record JiraProjectIssueType(
   string Id,

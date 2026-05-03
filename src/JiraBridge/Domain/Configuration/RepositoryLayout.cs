@@ -11,7 +11,7 @@ public sealed record RepositoryLayout(
     new(
       SettingsDirectory: ".jirabridge",
       SettingsFile: ".jirabridge/settings.json",
-      JiraMetadataFile: ".jirabridge/jira-project.json",
+      JiraMetadataFile: ".jirabridge/project-metadata.json",
       ConflictsFile: ".jirabridge/conflicts.json",
-      BacklogRoot: "project-docs/backlog");
+      BacklogRoot: "docs/jira-bridge");
 }

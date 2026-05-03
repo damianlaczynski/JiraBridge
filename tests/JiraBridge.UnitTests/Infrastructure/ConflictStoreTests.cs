@@ -19,7 +19,7 @@ public sealed class ConflictStoreTests
 
     ConflictStore.Record(
       repoRoot,
-      new ConflictRecord("SCRUM-1", "project-docs/backlog/story/item.md", "push", "Title", "Story", "L", "R", "details"));
+      new ConflictRecord("SCRUM-1", "docs/jira-bridge/story/item.md", "push", "Title", "Story", "L", "R", "details"));
 
     var store = new ConflictStore();
     IReadOnlyCollection<SyncConflict> conflicts = await store.GetOpenConflictsAsync(CancellationToken.None);
@@ -45,7 +45,7 @@ public sealed class ConflictStoreTests
 
     ConflictStore.Record(
       repoRoot,
-      new ConflictRecord("SCRUM-2", "project-docs/backlog/story/item.md", "pull", "Title", "Story", "L", "R", "details"));
+      new ConflictRecord("SCRUM-2", "docs/jira-bridge/story/item.md", "pull", "Title", "Story", "L", "R", "details"));
 
     ConflictStore.Clear(repoRoot, "SCRUM-2");
 

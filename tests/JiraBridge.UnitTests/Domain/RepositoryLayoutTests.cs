@@ -11,7 +11,7 @@ public sealed class RepositoryLayoutTests
     var layout = RepositoryLayout.Default;
 
     Assert.Equal(".jirabridge/settings.json", layout.SettingsFile);
-    Assert.Equal(".jirabridge/jira-project.json", layout.JiraMetadataFile);
-    Assert.Equal("project-docs/backlog", layout.BacklogRoot);
+    Assert.Equal(".jirabridge/project-metadata.json", layout.JiraMetadataFile);
+    Assert.Equal("docs/jira-bridge", layout.BacklogRoot);
   }
 }

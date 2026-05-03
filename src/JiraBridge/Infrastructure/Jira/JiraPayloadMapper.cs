@@ -75,7 +75,7 @@ public static class JiraPayloadMapper
     }
 
     JiraSprintInfo? sprint = SprintPathConvention.ResolveSprintForArtifact(document.Path, backlogRoot, jiraConfiguration.Sprints);
-    string? sprintDirectoryName = SprintPathConvention.TryExtractSprintDirectoryNameFromPath(Path.GetRelativePath(backlogRoot, document.Path));
+    string? sprintDirectoryName = SprintPathConvention.TryExtractSprintDirectorySegment(document.Path, backlogRoot);
     if (sprint is null && !string.IsNullOrWhiteSpace(sprintDirectoryName))
     {
       throw new InvalidOperationException(

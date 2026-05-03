@@ -18,7 +18,7 @@ public sealed class SyncExecutor(
   public async Task<CommandResult> PullAsync(CancellationToken cancellationToken)
   {
     cancellationToken.ThrowIfCancellationRequested();
-    progressSink.Start("Pull", "Inspecting repository state...", totalSteps: 6);
+    progressSink.Start("Pull", "Inspecting repository state...", totalSteps: 16);
 
     string repoRoot = RepositoryRootResolver.Resolve(null);
     RepositorySettings? repositorySettings = RepositorySettingsStore.TryLoad(repoRoot, out string? settingsError);
@@ -28,6 +28,18 @@ public sealed class SyncExecutor(
       return CommandResult.Fail(settingsError ?? "Could not load repository settings.");
     }
     progressSink.ReportStep("Validated repository settings.");
+
+    try
+    {
+      await metadataRefresher.RefreshAsync(repoRoot, repositorySettings, cancellationToken).ConfigureAwait(false);
+    }
+    catch (Exception ex)
+    {
+      progressSink.Fail($"Could not load current project metadata from Jira: {ex.Message}");
+      return CommandResult.Fail(
+        $"Could not load current project metadata from Jira: {ex.Message}",
+        "Check credentials in .env and Jira connectivity, then retry.");
+    }
 
     ArtifactLoadResult? loadResult = ArtifactRepository.LoadArtifacts(repoRoot, repositorySettings, writeErrors: false, allowEmptyBacklog: true);
     if (loadResult is null)
@@ -41,13 +53,12 @@ public sealed class SyncExecutor(
     if (jiraConfiguration is null)
     {
       string metadataPath = RepositoryJiraConfigurationStore.GetPath(repoRoot, repositorySettings);
-      progressSink.Fail($"Missing Jira metadata cache: {Path.GetRelativePath(repoRoot, metadataPath)}.");
+      progressSink.Fail($"Missing project metadata: {Path.GetRelativePath(repoRoot, metadataPath)}.");
       return CommandResult.Fail(
-        $"Missing Jira metadata cache: {Path.GetRelativePath(repoRoot, metadataPath)}.",
-        "Run configure first or retry when Jira is reachable.");
+        $"Missing project metadata: {Path.GetRelativePath(repoRoot, metadataPath)}.",
+        "Run configure while Jira is reachable to create the metadata file, then retry.");
     }
-    progressSink.ReportStep($"Loaded Jira metadata cache for project '{jiraConfiguration.ProjectKey}'.");
-    jiraConfiguration = await EnsureSprintProjectionAsync(repoRoot, repositorySettings, jiraConfiguration, cancellationToken).ConfigureAwait(false);
+    progressSink.ReportStep($"Using project '{jiraConfiguration.ProjectKey}' metadata for validation.");
 
     JiraSettings settings = JiraSettingsLoader.LoadFromEnvironment(repoRoot);
     using JiraApiClient client = jiraApiClientFactory.Create(settings);
@@ -71,7 +82,9 @@ public sealed class SyncExecutor(
         existingByIssueKey,
         remoteIssuesByKey,
         plannedPathsByIssueKey,
-        loadResult.BacklogRoot);
+        loadResult.BacklogRoot,
+        jiraConfiguration,
+        repositorySettings.SprintMappingEnabled);
     }
 
     int importedCount = 0;
@@ -96,7 +109,7 @@ public sealed class SyncExecutor(
         ?? throw new InvalidOperationException(
           $"Could not parse imported artifact '{Path.GetRelativePath(repoRoot, targetPath)}': {string.Join("; ", importErrors)}");
 
-      string localHash = ArtifactSyncStateService.ComputeLocalFingerprint(importedDocument);
+      string localHash = ArtifactSyncStateService.ComputeLocalFingerprint(importedDocument, loadResult.BacklogRoot);
       string remoteHash = ArtifactSyncStateService.ComputeRemoteFingerprint(remoteIssue);
       ArtifactFileUpdater.WriteSyncMetadata(targetPath, remoteIssue.IssueKey, localHash, remoteHash);
       importedCount++;
@@ -161,7 +174,7 @@ public sealed class SyncExecutor(
             "pull",
             document.Title,
             document.JiraIssueType ?? remoteIssue.IssueType,
-            ArtifactSyncStateService.ComputeLocalFingerprint(document),
+            ArtifactSyncStateService.ComputeLocalFingerprint(document, refreshedLoadResult.BacklogRoot),
             ArtifactSyncStateService.ComputeRemoteFingerprint(remoteIssue),
             ConflictDiffFormatter.Build(document, localPayload, remoteIssue)));
         continue;
@@ -182,7 +195,7 @@ public sealed class SyncExecutor(
       ArtifactDocument updatedDocument = ArtifactMarkdownParser.TryParse(targetPath, out List<string> parseErrors)
         ?? throw new InvalidOperationException(
           $"Could not parse updated artifact '{document.RelativePath(repoRoot)}': {string.Join("; ", parseErrors)}");
-      string localHash = ArtifactSyncStateService.ComputeLocalFingerprint(updatedDocument);
+      string localHash = ArtifactSyncStateService.ComputeLocalFingerprint(updatedDocument, refreshedLoadResult.BacklogRoot);
       string remoteHash = ArtifactSyncStateService.ComputeRemoteFingerprint(remoteIssue);
       ArtifactFileUpdater.WriteSyncMetadata(targetPath, remoteIssue.IssueKey, localHash, remoteHash);
       if (!string.Equals(targetPath, document.Path, StringComparison.OrdinalIgnoreCase))
@@ -193,7 +206,7 @@ public sealed class SyncExecutor(
       updatedCount++;
     }
 
-    RemoveMovedArtifactSourceFiles(movedArtifacts);
+    RemoveMovedArtifactSourceFiles(movedArtifacts, refreshedLoadResult.BacklogRoot);
 
     if (movedArtifacts.Count > 0)
     {
@@ -204,7 +217,7 @@ public sealed class SyncExecutor(
         return CommandResult.Fail("Could not reload artifacts after sprint-based file relocation.");
       }
 
-      RewriteReferencesAfterMove(postMoveLoadResult.Documents.Values, movedArtifacts);
+      RewriteReferencesAfterMove(postMoveLoadResult.Documents.Values, movedArtifacts, postMoveLoadResult.BacklogRoot);
     }
 
     progressSink.ReportStep($"Applied remote updates and recorded {conflictCount} conflict(s).");
@@ -226,7 +239,7 @@ public sealed class SyncExecutor(
     progressSink.Start(
       dryRun ? "Push Dry-Run" : "Push",
       dryRun ? "Preparing dry-run preview..." : "Preparing push...",
-      totalSteps: 7);
+      totalSteps: 17);
 
     string repoRoot = RepositoryRootResolver.Resolve(null);
     RepositorySettings? repositorySettings = RepositorySettingsStore.TryLoad(repoRoot, out string? settingsError);
@@ -236,6 +249,18 @@ public sealed class SyncExecutor(
       return CommandResult.Fail(settingsError ?? "Could not load repository settings.");
     }
     progressSink.ReportStep("Validated repository settings.");
+
+    try
+    {
+      await metadataRefresher.RefreshAsync(repoRoot, repositorySettings, cancellationToken).ConfigureAwait(false);
+    }
+    catch (Exception ex)
+    {
+      progressSink.Fail($"Could not load current project metadata from Jira: {ex.Message}");
+      return CommandResult.Fail(
+        $"Could not load current project metadata from Jira: {ex.Message}",
+        "Check credentials in .env and Jira connectivity, then retry.");
+    }
 
     ArtifactLoadResult? loadResult = ArtifactRepository.LoadArtifacts(repoRoot, repositorySettings, writeErrors: false, allowEmptyBacklog: true);
     if (loadResult is null)
@@ -249,13 +274,12 @@ public sealed class SyncExecutor(
     if (jiraConfiguration is null)
     {
       string metadataPath = RepositoryJiraConfigurationStore.GetPath(repoRoot, repositorySettings);
-      progressSink.Fail($"Missing Jira metadata cache: {Path.GetRelativePath(repoRoot, metadataPath)}.");
+      progressSink.Fail($"Missing project metadata: {Path.GetRelativePath(repoRoot, metadataPath)}.");
       return CommandResult.Fail(
-        $"Missing Jira metadata cache: {Path.GetRelativePath(repoRoot, metadataPath)}.",
-        "Run configure first or retry when Jira is reachable.");
+        $"Missing project metadata: {Path.GetRelativePath(repoRoot, metadataPath)}.",
+        "Run configure while Jira is reachable to create the metadata file, then retry.");
     }
-    progressSink.ReportStep($"Loaded Jira metadata cache for project '{jiraConfiguration.ProjectKey}'.");
-    jiraConfiguration = await EnsureSprintProjectionAsync(repoRoot, repositorySettings, jiraConfiguration, cancellationToken).ConfigureAwait(false);
+    progressSink.ReportStep($"Using project '{jiraConfiguration.ProjectKey}' metadata for validation.");
 
     JiraSettings settings = JiraSettingsLoader.LoadFromEnvironment(repoRoot);
     List<ArtifactDocument> orderedDocuments = PlanBuilder.OrderDocuments(loadResult.Documents.Values.ToList());
@@ -437,35 +461,44 @@ public sealed class SyncExecutor(
     IReadOnlyDictionary<string, ArtifactDocument> existingByIssueKey,
     IReadOnlyDictionary<string, JiraRemoteIssue> remoteIssuesByKey,
     IDictionary<string, string> plannedPathsByIssueKey,
-    string backlogRoot)
+    string backlogRoot,
+    RepositoryJiraConfiguration jiraConfiguration,
+    bool sprintMappingEnabled)
   {
     if (plannedPathsByIssueKey.TryGetValue(remoteIssue.IssueKey, out string? plannedPath))
     {
       return plannedPath;
     }
 
-    string? parentPath = null;
-    if (!string.IsNullOrWhiteSpace(remoteIssue.ParentIssueKey))
+    string? placementParentPath = null;
+    if (!string.IsNullOrWhiteSpace(remoteIssue.ParentIssueKey) &&
+        RepositoryJiraIssueTypeQueries.IsSubtask(jiraConfiguration, remoteIssue.IssueType))
     {
       if (remoteIssuesByKey.TryGetValue(remoteIssue.ParentIssueKey, out JiraRemoteIssue? parentIssue))
       {
-        parentPath = ResolvePlannedArtifactPath(
+        placementParentPath = ResolvePlannedArtifactPath(
           parentIssue,
           existingByIssueKey,
           remoteIssuesByKey,
           plannedPathsByIssueKey,
-          backlogRoot);
+          backlogRoot,
+          jiraConfiguration,
+          sprintMappingEnabled);
       }
       else if (existingByIssueKey.TryGetValue(remoteIssue.ParentIssueKey, out ArtifactDocument? existingParent))
       {
-        parentPath = existingParent.Path;
+        placementParentPath = existingParent.Path;
       }
     }
 
-    string resolvedPath = ArtifactImportWriter.BuildPlannedArtifactPath(backlogRoot, remoteIssue, parentPath);
+    string resolvedPath = ArtifactImportWriter.BuildPlannedArtifactPath(
+      backlogRoot,
+      remoteIssue,
+      placementParentPath,
+      sprintMappingEnabled);
     if (existingByIssueKey.TryGetValue(remoteIssue.IssueKey, out ArtifactDocument? existingDocument))
     {
-      if (ShouldKeepExistingPath(existingDocument.Path, parentPath, remoteIssue.Sprint))
+      if (ShouldKeepExistingPath(existingDocument.Path, resolvedPath))
       {
         plannedPathsByIssueKey[remoteIssue.IssueKey] = existingDocument.Path;
         return existingDocument.Path;
@@ -534,7 +567,7 @@ public sealed class SyncExecutor(
         loadResult.RepoRoot,
         loadResult.BacklogRoot,
         sprintMappingEnabled);
-      string localHash = ArtifactSyncStateService.ComputeLocalFingerprint(document);
+      string localHash = ArtifactSyncStateService.ComputeLocalFingerprint(document, loadResult.BacklogRoot);
 
       if (string.IsNullOrWhiteSpace(payload.ExistingIssueKey))
       {
@@ -619,28 +652,10 @@ public sealed class SyncExecutor(
     }
   }
 
-  private static bool ShouldKeepExistingPath(string existingPath, string? parentPath, JiraSprintInfo? sprint)
-  {
-    if (!string.IsNullOrWhiteSpace(parentPath))
-    {
-      string expectedDirectory = Path.Combine(
-        Path.GetDirectoryName(parentPath)!,
-        Path.GetFileNameWithoutExtension(parentPath)!);
-      return string.Equals(
-        Path.GetDirectoryName(existingPath),
-        expectedDirectory,
-        StringComparison.OrdinalIgnoreCase);
-    }
+  private static bool ShouldKeepExistingPath(string existingPath, string plannedPath) =>
+    string.Equals(Path.GetFullPath(existingPath), Path.GetFullPath(plannedPath), StringComparison.OrdinalIgnoreCase);
 
-    string? existingSprintDirectory = SprintPathConvention.TryExtractSprintDirectoryNameFromPath(existingPath);
-    string? expectedSprintDirectory = sprint is null
-      ? null
-      : SprintPathConvention.ToSprintDirectoryName(sprint.Name);
-
-    return string.Equals(existingSprintDirectory, expectedSprintDirectory, StringComparison.OrdinalIgnoreCase);
-  }
-
-  private static void RemoveMovedArtifactSourceFiles(IReadOnlyDictionary<string, string> movedArtifacts)
+  private static void RemoveMovedArtifactSourceFiles(IReadOnlyDictionary<string, string> movedArtifacts, string backlogRoot)
   {
     foreach ((string sourcePath, string targetPath) in movedArtifacts)
     {
@@ -654,11 +669,72 @@ public sealed class SyncExecutor(
         File.Delete(sourcePath);
       }
     }
+
+    string backlogRootFull = Path.GetFullPath(backlogRoot);
+    IEnumerable<string> relocationSources = movedArtifacts
+      .Where(pair => !string.Equals(pair.Key, pair.Value, StringComparison.OrdinalIgnoreCase))
+      .Select(pair => pair.Key)
+      .Distinct(StringComparer.OrdinalIgnoreCase)
+      .OrderByDescending(path => path.Length);
+
+    foreach (string sourcePath in relocationSources)
+    {
+      string? parentDirectory = Path.GetDirectoryName(sourcePath);
+      PruneEmptyParentDirectoriesAbove(parentDirectory, backlogRootFull);
+    }
+  }
+
+  private static void PruneEmptyParentDirectoriesAbove(string? startDirectory, string backlogRootFull)
+  {
+    string? current = startDirectory;
+    backlogRootFull = Path.GetFullPath(backlogRootFull);
+
+    while (!string.IsNullOrEmpty(current))
+    {
+      string currentFull = Path.GetFullPath(current);
+
+      if (string.Equals(currentFull, backlogRootFull, StringComparison.OrdinalIgnoreCase))
+      {
+        break;
+      }
+
+      string relativeToWorkspace = Path.GetRelativePath(backlogRootFull, currentFull);
+      if (relativeToWorkspace.StartsWith("..", StringComparison.Ordinal) || Path.IsPathRooted(relativeToWorkspace))
+      {
+        break;
+      }
+
+      if (ShouldPreserveEmptyKnownBucketUnderRoot(currentFull, backlogRootFull))
+      {
+        break;
+      }
+
+      if (!Directory.Exists(currentFull))
+      {
+        current = Path.GetDirectoryName(currentFull);
+        continue;
+      }
+
+      if (Directory.EnumerateFileSystemEntries(currentFull).Any())
+      {
+        break;
+      }
+
+      Directory.Delete(currentFull);
+      current = Path.GetDirectoryName(currentFull);
+    }
+  }
+
+  private static bool ShouldPreserveEmptyKnownBucketUnderRoot(string directoryFullPath, string backlogRootFull)
+  {
+    string backlogBucket = Path.GetFullPath(Path.Combine(backlogRootFull, SprintPathConvention.BacklogBucketSegment));
+    return string.Equals(directoryFullPath, backlogBucket, StringComparison.OrdinalIgnoreCase);
   }
 
   private static void RewriteReferencesAfterMove(
     IEnumerable<ArtifactDocument> documents,
-    IReadOnlyDictionary<string, string> movedArtifacts)
+    IReadOnlyDictionary<string, string> movedArtifacts,
+    string backlogRoot)
   {
     foreach (ArtifactDocument document in documents)
     {
@@ -708,24 +784,9 @@ public sealed class SyncExecutor(
       ArtifactMarkdownWriter.Write(document.Path, document);
       ArtifactDocument rewrittenDocument = ArtifactMarkdownParser.TryParse(document.Path, out List<string> parseErrors)
         ?? throw new InvalidOperationException($"Could not parse rewritten artifact '{document.Path}': {string.Join("; ", parseErrors)}");
-      string localHash = ArtifactSyncStateService.ComputeLocalFingerprint(rewrittenDocument);
+      string localHash = ArtifactSyncStateService.ComputeLocalFingerprint(rewrittenDocument, backlogRoot);
       ArtifactFileUpdater.WriteSyncMetadata(document.Path, document.JiraIssueKey, localHash, document.JiraLastSyncedRemoteHash ?? string.Empty);
     }
-  }
-
-  private Task<RepositoryJiraConfiguration> EnsureSprintProjectionAsync(
-    string repoRoot,
-    RepositorySettings repositorySettings,
-    RepositoryJiraConfiguration configuration,
-    CancellationToken cancellationToken)
-  {
-    if (!RepositoryMetadataRefresher.ShouldRefreshSprintProjection(repositorySettings, configuration))
-    {
-      return Task.FromResult(configuration);
-    }
-
-    progressSink.ReportStep("Refreshing Jira metadata cache (sprint projection)...");
-    return metadataRefresher.RefreshAsync(repoRoot, repositorySettings, cancellationToken);
   }
 }
 

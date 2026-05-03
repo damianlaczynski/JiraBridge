@@ -52,7 +52,7 @@ public sealed class ConflictResolverTests
       """);
 
     using var scope = CreateScope(repoRoot);
-    ConflictStore.Record(repoRoot, new ConflictRecord("SCRUM-2", Path.Combine("project-docs", "backlog", "story.md"), "pull", "Local story", "Story", "L", "R", "details"));
+    ConflictStore.Record(repoRoot, new ConflictRecord("SCRUM-2", Path.Combine("docs", "jira-bridge", "backlog", "story.md"), "pull", "Local story", "Story", "L", "R", "details"));
 
     var handler = new StubHttpMessageHandler((request, _) =>
     {
@@ -75,7 +75,7 @@ public sealed class ConflictResolverTests
         """);
     });
 
-    var resolver = new ConflictResolver(new StubJiraApiClientFactory(handler), UnexpectedMetadataRefresh());
+    var resolver = new ConflictResolver(new StubJiraApiClientFactory(handler), new LocalFixtureMetadataRefresher());
 
     CommandResult result = await resolver.ResolveAsync("SCRUM-2", ConflictResolutionStrategy.Jira, CancellationToken.None);
 
@@ -121,7 +121,7 @@ public sealed class ConflictResolverTests
       """);
 
     using var scope = CreateScope(repoRoot);
-    ConflictStore.Record(repoRoot, new ConflictRecord("SCRUM-2", Path.Combine("project-docs", "backlog", "story.md"), "push", "Local story", "Story", "L", "R", "details"));
+    ConflictStore.Record(repoRoot, new ConflictRecord("SCRUM-2", Path.Combine("docs", "jira-bridge", "backlog", "story.md"), "push", "Local story", "Story", "L", "R", "details"));
 
     string? putBody = null;
     var handler = new StubHttpMessageHandler((request, _) =>
@@ -165,7 +165,7 @@ public sealed class ConflictResolverTests
       return new HttpResponseMessage(HttpStatusCode.NotFound) { Content = new StringContent("missing") };
     });
 
-    var resolver = new ConflictResolver(new StubJiraApiClientFactory(handler), UnexpectedMetadataRefresh());
+    var resolver = new ConflictResolver(new StubJiraApiClientFactory(handler), new LocalFixtureMetadataRefresher());
 
     CommandResult result = await resolver.ResolveAsync("SCRUM-2", ConflictResolutionStrategy.Repository, CancellationToken.None);
 
@@ -206,11 +206,6 @@ public sealed class ConflictResolverTests
     Assert.Contains(">>>>>>> JIRA", merged);
   }
 
-  private static IRepositoryMetadataRefresher UnexpectedMetadataRefresh() =>
-    new FakeRepositoryMetadataRefresher((_, _, _) =>
-      Task.FromException<RepositoryJiraConfiguration>(
-        new InvalidOperationException("Unexpected metadata refresh in unit test.")));
-
   private static TestProcessScope CreateScope(string repoRoot)
   {
     var scope = new TestProcessScope(
@@ -238,10 +233,9 @@ public sealed class ConflictResolverTests
         "https://example.atlassian.net",
         [new JiraProjectIssueType("1", "Story", false)],
         [],
-        [],
-        SprintProjectionCached: true));
+        []));
 
-    Directory.CreateDirectory(Path.Combine(repoRoot, "project-docs", "backlog"));
+    Directory.CreateDirectory(Path.Combine(repoRoot, "docs", "jira-bridge"));
     return settings;
   }
 
@@ -255,7 +249,7 @@ public sealed class ConflictResolverTests
 
   private static string CreateArtifact(string repoRoot, string fileName, string content)
   {
-    string path = Path.Combine(repoRoot, "project-docs", "backlog", fileName);
+    string path = Path.Combine(repoRoot, "docs", "jira-bridge", "backlog", fileName);
     Directory.CreateDirectory(Path.GetDirectoryName(path)!);
     File.WriteAllText(path, content, Encoding.UTF8);
     return path;

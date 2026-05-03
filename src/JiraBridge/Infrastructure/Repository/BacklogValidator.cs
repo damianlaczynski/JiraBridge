@@ -16,14 +16,15 @@ public sealed class BacklogValidator(IRepositoryMetadataRefresher metadataRefres
       return CommandResult.Fail(settingsError ?? "Could not load repository settings.");
     }
 
-    string? refreshWarning = null;
     try
     {
       await metadataRefresher.RefreshAsync(repoRoot, settings, cancellationToken);
     }
     catch (Exception ex)
     {
-      refreshWarning = $"Warning: could not refresh Jira metadata. Falling back to the local cache. Details: {ex.Message}";
+      return CommandResult.Fail(
+        $"Could not load current project metadata from Jira: {ex.Message}",
+        "Check credentials in .env and Jira connectivity, then retry.");
     }
 
     ArtifactLoadResult? loadResult = ArtifactRepository.LoadArtifacts(repoRoot, settings, writeErrors: false);
@@ -34,20 +35,13 @@ public sealed class BacklogValidator(IRepositoryMetadataRefresher metadataRefres
 
     if (loadResult.ValidationIssues.Count == 0)
     {
-      return string.IsNullOrWhiteSpace(refreshWarning)
-        ? CommandResult.Ok($"Validation passed. Checked {loadResult.Documents.Count} artifact files.")
-        : CommandResult.Ok($"Validation passed. Checked {loadResult.Documents.Count} artifact files.", refreshWarning);
+      return CommandResult.Ok($"Validation passed. Checked {loadResult.Documents.Count} artifact files.");
     }
 
     List<string> details = loadResult.ValidationIssues
       .OrderBy(issue => issue.FilePath, StringComparer.OrdinalIgnoreCase)
       .Select(issue => $"{Path.GetRelativePath(loadResult.RepoRoot, issue.FilePath)}: {issue.Message}")
       .ToList();
-
-    if (!string.IsNullOrWhiteSpace(refreshWarning))
-    {
-      details.Insert(0, refreshWarning);
-    }
 
     return CommandResult.Fail(
       $"Validation failed. Files checked: {loadResult.Documents.Count}. Issues found: {loadResult.ValidationIssues.Count}.",

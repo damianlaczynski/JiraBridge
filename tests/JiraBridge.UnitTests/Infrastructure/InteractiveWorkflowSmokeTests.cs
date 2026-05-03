@@ -78,7 +78,7 @@ public sealed class InteractiveWorkflowSmokeTests
     Assert.True(configure.Success);
     Assert.Contains("Repository configuration saved", configure.Message);
     Assert.True(File.Exists(Path.Combine(repoRoot, ".jirabridge", "settings.json")));
-    Assert.True(File.Exists(Path.Combine(repoRoot, ".jirabridge", "jira-project.json")));
+    Assert.True(File.Exists(Path.Combine(repoRoot, ".jirabridge", "project-metadata.json")));
 
     string artifactPath = CreateArtifact(
       repoRoot,
@@ -155,7 +155,7 @@ public sealed class InteractiveWorkflowSmokeTests
 
   private static string CreateArtifact(string repoRoot, string fileName, string content)
   {
-    string path = Path.Combine(repoRoot, "project-docs", "backlog", fileName);
+    string path = Path.Combine(repoRoot, "docs", "jira-bridge", "backlog", fileName);
     Directory.CreateDirectory(Path.GetDirectoryName(path)!);
     File.WriteAllText(path, content, Encoding.UTF8);
     return path;

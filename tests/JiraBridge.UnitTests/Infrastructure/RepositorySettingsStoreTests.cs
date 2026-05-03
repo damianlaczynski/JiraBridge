@@ -13,8 +13,8 @@ public sealed class RepositorySettingsStoreTests
 
     Assert.Equal(1, settings.SchemaVersion);
     Assert.Equal("SCRUM", settings.JiraProjectKey);
-    Assert.Equal("project-docs/backlog", settings.BacklogRoot);
-    Assert.Equal(".jirabridge/jira-project.json", settings.MetadataFile);
+    Assert.Equal("docs/jira-bridge", settings.BacklogRoot);
+    Assert.Equal(".jirabridge/project-metadata.json", settings.MetadataFile);
     Assert.True(settings.SprintMappingEnabled);
   }
 }

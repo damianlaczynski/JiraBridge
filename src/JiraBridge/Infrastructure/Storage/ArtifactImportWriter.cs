@@ -1,6 +1,5 @@
 using System.Text;
 using System.Text.RegularExpressions;
-using JiraBridge.Domain.Configuration;
 using JiraBridge.Infrastructure.Jira;
 using JiraBridge.Infrastructure.Repository;
 
@@ -8,13 +7,22 @@ namespace JiraBridge.Infrastructure.Storage;
 
 public static partial class ArtifactImportWriter
 {
-  public static string BuildPlannedArtifactPath(string backlogRoot, JiraRemoteIssue issue, string? parentPath)
+  public static string BuildPlannedArtifactPath(
+    string backlogRoot,
+    JiraRemoteIssue issue,
+    string? parentArtifactPathForSubtaskNest,
+    bool sprintMappingEnabled)
   {
-    string fileName = $"{issue.IssueKey.ToLowerInvariant()}-{Slugify(issue.Summary)}.md";
-    string directory = string.IsNullOrWhiteSpace(parentPath)
-      ? SprintPathConvention.BuildRootDirectory(backlogRoot, issue.IssueType, issue.Sprint)
-      : BuildChildDirectoryPath(parentPath);
-    return Path.Combine(directory, fileName);
+    string fileName = $"{issue.IssueKey}.md";
+    if (!string.IsNullOrWhiteSpace(parentArtifactPathForSubtaskNest))
+    {
+      string parentDirectory = Path.GetDirectoryName(parentArtifactPathForSubtaskNest)
+        ?? throw new InvalidOperationException($"Could not determine parent directory for '{parentArtifactPathForSubtaskNest}'.");
+      return Path.Combine(parentDirectory, issue.IssueKey, fileName);
+    }
+
+    string placement = SprintPathConvention.BuildPlacementDirectory(backlogRoot, issue.Sprint, sprintMappingEnabled);
+    return Path.Combine(placement, issue.IssueKey, fileName);
   }
 
   public static void WriteImportedArtifact(
@@ -90,14 +98,6 @@ public static partial class ArtifactImportWriter
     }
 
     return $"[{path}]({path})";
-  }
-
-  private static string BuildChildDirectoryPath(string parentPath)
-  {
-    string parentDirectory = Path.GetDirectoryName(parentPath)
-      ?? throw new InvalidOperationException($"Could not determine parent directory for '{parentPath}'.");
-    string parentFileName = Path.GetFileNameWithoutExtension(parentPath);
-    return Path.Combine(parentDirectory, parentFileName);
   }
 
   private static string Slugify(string value)

@@ -34,6 +34,17 @@ public sealed class ConflictResolver(
       return CommandResult.Fail($"Conflict '{issueKey}' was not found.");
     }
 
+    try
+    {
+      await metadataRefresher.RefreshAsync(repoRoot, repositorySettings, cancellationToken).ConfigureAwait(false);
+    }
+    catch (Exception ex)
+    {
+      return CommandResult.Fail(
+        $"Could not load current project metadata from Jira: {ex.Message}",
+        "Check credentials in .env and Jira connectivity, then retry.");
+    }
+
     ArtifactLoadResult? loadResult = ArtifactRepository.LoadArtifacts(repoRoot, repositorySettings, writeErrors: false, allowEmptyBacklog: true);
     if (loadResult is null)
     {
@@ -41,12 +52,7 @@ public sealed class ConflictResolver(
     }
 
     RepositoryJiraConfiguration jiraConfiguration = loadResult.JiraConfiguration
-      ?? throw new InvalidOperationException("Missing Jira metadata cache.");
-
-    if (RepositoryMetadataRefresher.ShouldRefreshSprintProjection(repositorySettings, jiraConfiguration))
-    {
-      jiraConfiguration = await metadataRefresher.RefreshAsync(repoRoot, repositorySettings, cancellationToken).ConfigureAwait(false);
-    }
+      ?? throw new InvalidOperationException("Missing project metadata after refresh.");
 
     ArtifactDocument? document = loadResult.Documents.Values.FirstOrDefault(item =>
       string.Equals(item.RelativePath(repoRoot), conflict.RelativePath, StringComparison.OrdinalIgnoreCase));
@@ -107,7 +113,7 @@ public sealed class ConflictResolver(
       remoteIssue.IssueKey,
       loadResult.RepositorySettings.SprintMappingEnabled ? jiraConfiguration.SprintFieldId : null,
       cancellationToken);
-    string localHash = ArtifactSyncStateService.ComputeLocalFingerprint(document);
+    string localHash = ArtifactSyncStateService.ComputeLocalFingerprint(document, loadResult.BacklogRoot);
     string remoteHash = ArtifactSyncStateService.ComputeRemoteFingerprint(updatedRemoteIssue);
     ArtifactFileUpdater.WriteSyncMetadata(document.Path, remoteIssue.IssueKey, localHash, remoteHash);
     document.SetKeyValue("Metadata", "Jira Last Synced Local Hash", localHash);
@@ -135,7 +141,7 @@ public sealed class ConflictResolver(
 
     ArtifactDocument updatedDocument = ArtifactMarkdownParser.TryParse(targetPath, out List<string> parseErrors)
       ?? throw new InvalidOperationException($"Could not parse updated artifact '{document.RelativePath(loadResult.RepoRoot)}': {string.Join("; ", parseErrors)}");
-    string localHash = ArtifactSyncStateService.ComputeLocalFingerprint(updatedDocument);
+    string localHash = ArtifactSyncStateService.ComputeLocalFingerprint(updatedDocument, loadResult.BacklogRoot);
     string remoteHash = ArtifactSyncStateService.ComputeRemoteFingerprint(remoteIssue);
     ArtifactFileUpdater.WriteSyncMetadata(targetPath, remoteIssue.IssueKey, localHash, remoteHash);
   }

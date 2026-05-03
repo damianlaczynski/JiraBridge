@@ -9,11 +9,13 @@ namespace JiraBridge.UnitTests.Infrastructure;
 public sealed class ArtifactImportWriterTests
 {
   [Fact]
-  public void BuildPlannedArtifactPath_BuildsChildPathUnderParentArtifact()
+  public void BuildPlannedArtifactPath_WhenNestedUnderParent_PlacesIssueKeyMarkdownUnderParentDirectory()
   {
+    string jiraBridgeRoot = Path.Combine("repo", "docs", "jira-bridge");
+    string parentFile = Path.Combine(jiraBridgeRoot, "backlog", "SCRUM-1", "SCRUM-1.md");
     var issue = new JiraRemoteIssue(
       "SCRUM-15",
-      "Story",
+      "Sub-task",
       "To Do",
       "Create API",
       "Description",
@@ -22,11 +24,12 @@ public sealed class ArtifactImportWriterTests
       []);
 
     string result = ArtifactImportWriter.BuildPlannedArtifactPath(
-      Path.Combine("repo", "project-docs", "backlog"),
+      jiraBridgeRoot,
       issue,
-      Path.Combine("repo", "project-docs", "backlog", "epic", "scrum-1-parent.md"));
+      parentFile,
+      sprintMappingEnabled: false);
 
-    Assert.EndsWith(Path.Combine("epic", "scrum-1-parent", "scrum-15-create-api.md"), result, StringComparison.OrdinalIgnoreCase);
+    Assert.EndsWith(Path.Combine("SCRUM-1", "SCRUM-15", "SCRUM-15.md"), result, StringComparison.OrdinalIgnoreCase);
   }
 
   [Fact]
@@ -37,7 +40,7 @@ public sealed class ArtifactImportWriterTests
 
     try
     {
-      string artifactPath = Path.Combine(repoRoot, "project-docs", "backlog", "story.md");
+      string artifactPath = Path.Combine(repoRoot, "docs", "jira-bridge", "backlog", "story.md");
       ArtifactImportWriter.WriteImportedArtifact(
         artifactPath,
         new JiraRemoteIssue("SCRUM-10", "Story", "To Do", "Imported story", "Body", DateTimeOffset.UtcNow, null, []),

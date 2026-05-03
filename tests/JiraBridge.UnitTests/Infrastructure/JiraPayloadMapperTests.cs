@@ -94,8 +94,8 @@ public sealed class JiraPayloadMapperTests
   public void Map_WhenSprintMappingEnabled_ResolvesSprintFromPath()
   {
     string repoRoot = Path.Combine("C:", "repo");
-    string backlogRoot = Path.Combine(repoRoot, "project-docs", "backlog");
-    string storyPath = Path.Combine(backlogRoot, "sprints", "sprint-sprint-24", "story", "story.md");
+    string backlogRoot = Path.Combine(repoRoot, "docs", "jira-bridge");
+    string storyPath = Path.Combine(backlogRoot, "sprint-sprint-24", "story", "story.md");
 
     ArtifactDocument story = CreateDocument(storyPath, "Story", issueType: "Story");
     IReadOnlyDictionary<string, ArtifactDocument> documents = new Dictionary<string, ArtifactDocument>(StringComparer.OrdinalIgnoreCase)
@@ -131,8 +131,8 @@ public sealed class JiraPayloadMapperTests
   public void Map_WhenSprintMappingDisabled_DoesNotApplySprint()
   {
     string repoRoot = Path.Combine("C:", "repo");
-    string backlogRoot = Path.Combine(repoRoot, "project-docs", "backlog");
-    string storyPath = Path.Combine(backlogRoot, "sprints", "sprint-sprint-24", "story", "story.md");
+    string backlogRoot = Path.Combine(repoRoot, "docs", "jira-bridge");
+    string storyPath = Path.Combine(backlogRoot, "sprint-sprint-24", "story", "story.md");
 
     ArtifactDocument story = CreateDocument(storyPath, "Story", issueType: "Story");
     IReadOnlyDictionary<string, ArtifactDocument> documents = new Dictionary<string, ArtifactDocument>(StringComparer.OrdinalIgnoreCase)

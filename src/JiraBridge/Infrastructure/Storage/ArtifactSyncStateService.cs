@@ -7,12 +7,12 @@ namespace JiraBridge.Infrastructure.Storage;
 
 public static class ArtifactSyncStateService
 {
-  public static string ComputeLocalFingerprint(ArtifactDocument document)
+  public static string ComputeLocalFingerprint(ArtifactDocument document, string? backlogRoot = null)
   {
     var builder = new StringBuilder();
     builder.AppendLine(document.Title.Trim());
     builder.AppendLine(document.JiraIssueType?.Trim() ?? string.Empty);
-    builder.AppendLine(SprintPathConvention.TryExtractSprintDirectoryNameFromPath(document.Path) ?? string.Empty);
+    builder.AppendLine(SprintPathConvention.TryExtractSprintDirectorySegment(document.Path, backlogRoot) ?? string.Empty);
     builder.AppendLine(document.Parent?.Trim() ?? string.Empty);
     builder.AppendLine(document.GetSectionBody("Description"));
 
@@ -72,7 +72,7 @@ public static class ArtifactSyncStateService
       return true;
     }
 
-    return !string.Equals(ComputeLocalFingerprint(document), lastSyncedLocalHash, StringComparison.OrdinalIgnoreCase);
+    return !string.Equals(ComputeLocalFingerprint(document, null), lastSyncedLocalHash, StringComparison.OrdinalIgnoreCase);
   }
 
   public static bool HasRemoteChanges(ArtifactDocument document, JiraRemoteIssue remoteIssue)

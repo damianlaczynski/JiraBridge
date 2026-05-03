@@ -16,24 +16,25 @@ public static class RepositoryJiraConfigurationStore
 
   public static RepositoryJiraConfiguration? TryLoad(string repoRoot, RepositorySettings settings, out string? error)
   {
-    string path = GetPath(repoRoot, settings);
     error = null;
+    string resolvedPath = ResolveMetadataFilePath(repoRoot, settings.MetadataFile);
 
-    if (!File.Exists(path))
+    if (!File.Exists(resolvedPath))
     {
-      error = $"Missing Jira metadata cache: {Path.GetRelativePath(repoRoot, path)}. Run 'jirabridge configure <jira-project-key>' or retry when Jira is reachable.";
+      error =
+        $"Missing project metadata file '{Path.GetRelativePath(repoRoot, resolvedPath)}'. Run 'configure' while Jira is reachable, then retry.";
       return null;
     }
 
     try
     {
       RepositoryJiraConfiguration? configuration = JsonSerializer.Deserialize<RepositoryJiraConfiguration>(
-        File.ReadAllText(path),
+        File.ReadAllText(resolvedPath),
         JsonOptions);
 
       if (configuration is null)
       {
-        error = $"Could not deserialize Jira project configuration: {Path.GetRelativePath(repoRoot, path)}";
+        error = $"Could not deserialize project metadata: {Path.GetRelativePath(repoRoot, resolvedPath)}";
         return null;
       }
 
@@ -41,9 +42,29 @@ public static class RepositoryJiraConfigurationStore
     }
     catch (Exception ex)
     {
-      error = $"Could not read Jira project configuration '{Path.GetRelativePath(repoRoot, path)}': {ex.Message}";
+      error = $"Could not read project metadata '{Path.GetRelativePath(repoRoot, resolvedPath)}': {ex.Message}";
       return null;
     }
+  }
+
+  private static string ResolveMetadataFilePath(string repoRoot, string metadataFileRelative)
+  {
+    string primary = PathResolver.ResolveRepoRelativePath(repoRoot, metadataFileRelative);
+    if (File.Exists(primary))
+    {
+      return primary;
+    }
+
+    string? dir = Path.GetDirectoryName(primary);
+    if (string.IsNullOrWhiteSpace(dir))
+    {
+      return primary;
+    }
+
+    string legacy = Path.Combine(dir, "jira-project.json");
+    return File.Exists(legacy)
+      ? legacy
+      : primary;
   }
 
   public static void Save(string repoRoot, RepositorySettings settings, RepositoryJiraConfiguration configuration)

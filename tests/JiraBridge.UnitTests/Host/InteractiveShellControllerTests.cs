@@ -37,7 +37,7 @@ public sealed class InteractiveShellControllerTests
   {
     var conflictStore = new FakeConflictStore(
       [
-        new SyncConflict("SCRUM-2", "project-docs/backlog/story.md", "Local story", "Story", "push", "summary", "Summary:\n- repo\n+ jira", DateTimeOffset.UtcNow)
+        new SyncConflict("SCRUM-2", "docs/jira-bridge/story.md", "Local story", "Story", "push", "summary", "Summary:\n- repo\n+ jira", DateTimeOffset.UtcNow)
       ]);
 
     var resolver = new FakeConflictResolver(conflictStore);
