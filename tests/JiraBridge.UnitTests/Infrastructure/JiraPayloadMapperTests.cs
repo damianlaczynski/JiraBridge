@@ -164,6 +164,81 @@ public sealed class JiraPayloadMapperTests
     Assert.Null(payload.SprintId);
   }
 
+  [Fact]
+  public void Map_WhenSprintMappingEnabled_AndJiraReportsNoSprints_OmitsSprintIdForSprintFolderArtifact()
+  {
+    string repoRoot = Path.Combine("C:", "repo");
+    string backlogRoot = Path.Combine(repoRoot, "docs", "jira-bridge");
+    string storyPath = Path.Combine(backlogRoot, "sprint-scrum-sprint-1", "SCRUM-6", "SCRUM-6.md");
+
+    ArtifactDocument story = CreateDocument(storyPath, "Story", issueType: "Story");
+    IReadOnlyDictionary<string, ArtifactDocument> documents = new Dictionary<string, ArtifactDocument>(StringComparer.OrdinalIgnoreCase)
+    {
+      [storyPath] = story
+    };
+
+    var jiraConfiguration = new RepositoryJiraConfiguration(
+      "SCRUM",
+      "100",
+      "Scrum",
+      "https://example",
+      [],
+      [],
+      [],
+      SprintFieldId: "customfield_10020",
+      Sprints: []);
+
+    JiraIssuePayload payload = JiraPayloadMapper.Map(
+      story,
+      documents,
+      new Dictionary<string, string>(),
+      jiraConfiguration,
+      repoRoot,
+      backlogRoot,
+      sprintMappingEnabled: true);
+
+    Assert.True(payload.ApplySprintMapping);
+    Assert.Null(payload.SprintId);
+  }
+
+  [Fact]
+  public void Map_WhenSprintMappingEnabled_AndSprintSlugMismatch_ThrowsWithKnownSegments()
+  {
+    string repoRoot = Path.Combine("C:", "repo");
+    string backlogRoot = Path.Combine(repoRoot, "docs", "jira-bridge");
+    string storyPath = Path.Combine(backlogRoot, "sprint-unknown-sprint", "x", "x.md");
+
+    ArtifactDocument story = CreateDocument(storyPath, "Story", issueType: "Story");
+    IReadOnlyDictionary<string, ArtifactDocument> documents = new Dictionary<string, ArtifactDocument>(StringComparer.OrdinalIgnoreCase)
+    {
+      [storyPath] = story
+    };
+
+    var jiraConfiguration = new RepositoryJiraConfiguration(
+      "SCRUM",
+      "100",
+      "Scrum",
+      "https://example",
+      [],
+      [],
+      [],
+      SprintFieldId: "customfield_10020",
+      Sprints: [new JiraSprintInfo(24, "Sprint 24", "active", 7)]);
+
+    InvalidOperationException ex = Assert.Throws<InvalidOperationException>(() =>
+      JiraPayloadMapper.Map(
+        story,
+        documents,
+        new Dictionary<string, string>(),
+        jiraConfiguration,
+        repoRoot,
+        backlogRoot,
+        sprintMappingEnabled: true));
+
+    Assert.Contains("sprint-unknown-sprint", ex.Message, StringComparison.Ordinal);
+    Assert.Contains("sprint-sprint-24", ex.Message, StringComparison.Ordinal);
+  }
+
   private static ArtifactDocument CreateDocument(
     string path,
     string title,

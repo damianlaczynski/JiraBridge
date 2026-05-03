@@ -31,6 +31,27 @@ public static class PathResolver
     return Path.GetFullPath(Path.Combine(artifactDirectory, relativePath));
   }
 
+  public static bool AreRepositoryRelativePathsEqual(string? a, string? b)
+  {
+    if (string.IsNullOrWhiteSpace(a))
+    {
+      return string.IsNullOrWhiteSpace(b);
+    }
+
+    if (string.IsNullOrWhiteSpace(b))
+    {
+      return false;
+    }
+
+    return string.Equals(NormalizeRepoRelativePath(a), NormalizeRepoRelativePath(b), StringComparison.OrdinalIgnoreCase);
+  }
+
+  public static string NormalizeRepoRelativePath(string relativePath)
+  {
+    string trimmed = relativePath.Trim().TrimStart('.', '/', '\\');
+    return trimmed.Replace('\\', '/');
+  }
+
   public static bool IsNone(string value) =>
     string.Equals(value.Trim(), "none", StringComparison.OrdinalIgnoreCase) ||
     string.Equals(value.Trim(), "brak", StringComparison.OrdinalIgnoreCase);

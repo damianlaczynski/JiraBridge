@@ -326,6 +326,54 @@ public sealed class JiraApiClient : IDisposable
     return issues;
   }
 
+  public async Task<int?> TryComputeMaxIssueNumericSuffixAsync(string projectKey, CancellationToken cancellationToken)
+  {
+    const int sampleSize = 200;
+    object request = new
+    {
+      jql = $"project = \"{projectKey}\" ORDER BY created DESC",
+      maxResults = sampleSize,
+      fields = new[] { "key" }
+    };
+
+    using var response = await httpClient.PostAsync(
+      "/rest/api/3/search/jql",
+      new StringContent(JsonSerializer.Serialize(request), Encoding.UTF8, "application/json"),
+      cancellationToken);
+
+    await EnsureSuccessAsync(response, $"search recent issue keys for project {projectKey}", cancellationToken);
+
+    using var content = await response.Content.ReadAsStreamAsync(cancellationToken);
+    using var json = await JsonDocument.ParseAsync(content, cancellationToken: cancellationToken);
+
+    if (!json.RootElement.TryGetProperty("issues", out JsonElement issuesElement) ||
+        issuesElement.ValueKind != JsonValueKind.Array)
+    {
+      return null;
+    }
+
+    int? max = null;
+    foreach (JsonElement issueElement in issuesElement.EnumerateArray())
+    {
+      if (!issueElement.TryGetProperty("key", out JsonElement keyElement) ||
+          keyElement.ValueKind != JsonValueKind.String)
+      {
+        continue;
+      }
+
+      string? key = keyElement.GetString();
+      if (string.IsNullOrWhiteSpace(key) ||
+          !JiraIssueKeyFormat.TryParseNumericSuffix(key, projectKey, out int suffix))
+      {
+        continue;
+      }
+
+      max = max.HasValue ? Math.Max(max.Value, suffix) : suffix;
+    }
+
+    return max;
+  }
+
   public async Task<IReadOnlyList<JiraRemoteIssue>> SearchProjectIssuesAsync(string projectKey, CancellationToken cancellationToken) =>
     await SearchProjectIssuesAsync(projectKey, sprintFieldId: null, cancellationToken);
 
@@ -362,9 +410,11 @@ public sealed class JiraApiClient : IDisposable
     };
 
     string? sprintFieldId = await GetSprintFieldIdAsync(cancellationToken);
-    if (payload.ApplySprintMapping && !string.IsNullOrWhiteSpace(sprintFieldId))
+    if (payload.ApplySprintMapping &&
+        !string.IsNullOrWhiteSpace(sprintFieldId) &&
+        payload.SprintId.HasValue)
     {
-      fields[sprintFieldId] = payload.SprintId;
+      fields[sprintFieldId] = payload.SprintId.Value;
     }
 
     if (!string.IsNullOrWhiteSpace(payload.ParentIssueKey))
@@ -403,7 +453,7 @@ public sealed class JiraApiClient : IDisposable
     while (true)
     {
       using var response = await httpClient.GetAsync(
-        $"/rest/agile/1.0/board?projectKeyOrId={Uri.EscapeDataString(projectKey)}&type=scrum&startAt={startAt}&maxResults={pageSize}",
+        $"/rest/agile/1.0/board?projectKeyOrId={Uri.EscapeDataString(projectKey)}&startAt={startAt}&maxResults={pageSize}",
         cancellationToken);
       if (response.StatusCode == System.Net.HttpStatusCode.NotFound)
       {

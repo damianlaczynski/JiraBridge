@@ -93,6 +93,7 @@ public sealed class ScreenRenderer
     try
     {
       int width = GetSafeWidth();
+      int bufferHeight = GetSafeBufferHeight();
       var frameLines = new List<string>(lines.Count + 2)
       {
         title,
@@ -100,19 +101,41 @@ public sealed class ScreenRenderer
       };
       frameLines.AddRange(lines);
 
-      for (int row = 0; row < frameLines.Count; row++)
+      int totalLines = frameLines.Count;
+      bool truncated = totalLines > bufferHeight;
+      int rowsUsed;
+
+      if (truncated)
       {
-        Console.SetCursorPosition(0, row);
-        WriteStyledText(frameLines[row], width);
+        for (int row = 0; row < bufferHeight - 1; row++)
+        {
+          Console.SetCursorPosition(0, row);
+          WriteStyledText(frameLines[row], width);
+        }
+
+        int omitted = totalLines - (bufferHeight - 1);
+        Console.SetCursorPosition(0, bufferHeight - 1);
+        WriteStyledText($"[INFO] ... ({omitted} lines not shown — terminal buffer is {bufferHeight} rows; widen buffer or shorten conflict diff)", width);
+        rowsUsed = bufferHeight;
+      }
+      else
+      {
+        for (int row = 0; row < totalLines; row++)
+        {
+          Console.SetCursorPosition(0, row);
+          WriteStyledText(frameLines[row], width);
+        }
+
+        rowsUsed = totalLines;
       }
 
-      for (int row = frameLines.Count; row < previouslyRenderedLineCount; row++)
+      for (int row = rowsUsed; row < previouslyRenderedLineCount && row < bufferHeight; row++)
       {
         Console.SetCursorPosition(0, row);
         Console.Write(new string(' ', width));
       }
 
-      previouslyRenderedLineCount = frameLines.Count;
+      previouslyRenderedLineCount = rowsUsed;
     }
     catch (IOException)
     {
@@ -240,6 +263,18 @@ public sealed class ScreenRenderer
     catch
     {
       return 120;
+    }
+  }
+
+  private static int GetSafeBufferHeight()
+  {
+    try
+    {
+      return Math.Max(1, Console.BufferHeight);
+    }
+    catch
+    {
+      return 25;
     }
   }
 

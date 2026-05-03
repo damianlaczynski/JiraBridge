@@ -1,3 +1,4 @@
+using System.Linq;
 using JiraBridge.Domain.Artifacts;
 using JiraBridge.Domain.Configuration;
 using JiraBridge.Infrastructure.Repository;
@@ -76,13 +77,26 @@ public static class JiraPayloadMapper
 
     JiraSprintInfo? sprint = SprintPathConvention.ResolveSprintForArtifact(document.Path, backlogRoot, jiraConfiguration.Sprints);
     string? sprintDirectoryName = SprintPathConvention.TryExtractSprintDirectorySegment(document.Path, backlogRoot);
-    if (sprint is null && !string.IsNullOrWhiteSpace(sprintDirectoryName))
+    if (sprint is not null)
     {
-      throw new InvalidOperationException(
-        $"Artifact '{document.Path}' points to sprint directory '{sprintDirectoryName}', but this sprint was not found in Jira metadata.");
+      return sprint.Id;
     }
 
-    return sprint?.Id;
+    if (string.IsNullOrWhiteSpace(sprintDirectoryName))
+    {
+      return null;
+    }
+
+    IReadOnlyList<JiraSprintInfo>? sprints = jiraConfiguration.Sprints;
+    if (sprints is null || sprints.Count == 0)
+    {
+      return null;
+    }
+
+    IEnumerable<string> available = sprints.Select(info => SprintPathConvention.ToSprintDirectoryName(info.Name)).Distinct();
+    throw new InvalidOperationException(
+      $"Artifact '{document.Path}' points to sprint directory '{sprintDirectoryName}', but no Jira sprint matched that folder name. " +
+      $"Known sprint folder segments from Jira: {string.Join(", ", available.OrderBy(s => s, StringComparer.OrdinalIgnoreCase))}.");
   }
 
   private static void ResolvePublishParent(

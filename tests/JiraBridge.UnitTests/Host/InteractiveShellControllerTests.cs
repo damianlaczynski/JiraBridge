@@ -79,7 +79,9 @@ public sealed class InteractiveShellControllerTests
     var configurationScreen = new ConfigurationScreen(new ConfigurationViewModel());
     var validationScreen = new ValidationScreen(new ValidationViewModel());
     var pushScreen = new PushScreen();
+    var pushIssueScreen = new PushIssueScreen();
     var pullScreen = new PullScreen();
+    var pullIssueScreen = new PullIssueScreen();
     var conflictsScreen = new ConflictsScreen();
     var resolveConflictScreen = new ResolveConflictScreen();
 
@@ -91,7 +93,9 @@ public sealed class InteractiveShellControllerTests
       configurationScreen,
       validationScreen,
       pushScreen,
+      pushIssueScreen,
       pullScreen,
+      pullIssueScreen,
       conflictsScreen,
       resolveConflictScreen,
       new ScreenRenderer(),
@@ -118,11 +122,18 @@ public sealed class InteractiveShellControllerTests
 
   private sealed class FakeSyncExecutor : ISyncExecutor
   {
-    public Task<CommandResult> PullAsync(CancellationToken cancellationToken) =>
-      Task.FromResult(CommandResult.Ok("Pull executed."));
+    public Task<CommandResult> PullAsync(CancellationToken cancellationToken, string? issueKeyFilter = null) =>
+      Task.FromResult(
+        CommandResult.Ok(string.IsNullOrWhiteSpace(issueKeyFilter) ? "Pull executed." : $"Pull {issueKeyFilter.Trim()}."));
 
-    public Task<CommandResult> PushAsync(bool dryRun, CancellationToken cancellationToken) =>
-      Task.FromResult(CommandResult.Ok("Push executed."));
+    public Task<CommandResult> PushAsync(bool dryRun, CancellationToken cancellationToken, string? issueKeyFilter = null) =>
+      Task.FromResult(
+        CommandResult.Ok(
+          dryRun
+            ? "Push dry-run."
+            : string.IsNullOrWhiteSpace(issueKeyFilter)
+              ? "Push executed."
+              : $"Push {issueKeyFilter.Trim()}."));
   }
 
   private sealed class FakeConflictStore(IReadOnlyCollection<SyncConflict> initialItems) : IConflictStore

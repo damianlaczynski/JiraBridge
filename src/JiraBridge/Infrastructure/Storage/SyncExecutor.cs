@@ -15,7 +15,7 @@ public sealed class SyncExecutor(
   IRepositoryMetadataRefresher metadataRefresher,
   IOperationProgressSink progressSink) : ISyncExecutor
 {
-  public async Task<CommandResult> PullAsync(CancellationToken cancellationToken)
+  public async Task<CommandResult> PullAsync(CancellationToken cancellationToken, string? issueKeyFilter = null)
   {
     cancellationToken.ThrowIfCancellationRequested();
     progressSink.Start("Pull", "Inspecting repository state...", totalSteps: 16);
@@ -60,14 +60,42 @@ public sealed class SyncExecutor(
     }
     progressSink.ReportStep($"Using project '{jiraConfiguration.ProjectKey}' metadata for validation.");
 
+    string? normalizedIssueFilter = null;
+    if (!string.IsNullOrWhiteSpace(issueKeyFilter))
+    {
+      normalizedIssueFilter = issueKeyFilter.Trim();
+      if (!JiraIssueKeyFormat.TryParseNumericSuffix(normalizedIssueFilter, jiraConfiguration.ProjectKey, out _))
+      {
+        progressSink.Fail(
+          $"Issue key '{normalizedIssueFilter}' does not match configured project '{jiraConfiguration.ProjectKey}'.");
+        return CommandResult.Fail(
+          $"Issue key '{normalizedIssueFilter}' does not match configured project '{jiraConfiguration.ProjectKey}'.");
+      }
+
+      progressSink.ReportStep($"Pull scoped to issue '{normalizedIssueFilter}'.");
+    }
+
     JiraSettings settings = JiraSettingsLoader.LoadFromEnvironment(repoRoot);
     using JiraApiClient client = jiraApiClientFactory.Create(settings);
 
-    IReadOnlyList<JiraRemoteIssue> remoteIssues = await client.SearchProjectIssuesAsync(
-      jiraConfiguration.ProjectKey,
-      repositorySettings.SprintMappingEnabled ? jiraConfiguration.SprintFieldId : null,
-      cancellationToken);
-    progressSink.ReportStep($"Fetched {remoteIssues.Count} issue(s) from Jira.");
+    IReadOnlyList<JiraRemoteIssue> remoteIssues;
+    if (normalizedIssueFilter is not null)
+    {
+      JiraRemoteIssue issue = await client.GetIssueAsync(
+        normalizedIssueFilter,
+        repositorySettings.SprintMappingEnabled ? jiraConfiguration.SprintFieldId : null,
+        cancellationToken);
+      remoteIssues = new List<JiraRemoteIssue> { issue };
+      progressSink.ReportStep($"Fetched issue '{normalizedIssueFilter}' from Jira.");
+    }
+    else
+    {
+      remoteIssues = await client.SearchProjectIssuesAsync(
+        jiraConfiguration.ProjectKey,
+        repositorySettings.SprintMappingEnabled ? jiraConfiguration.SprintFieldId : null,
+        cancellationToken);
+      progressSink.ReportStep($"Fetched {remoteIssues.Count} issue(s) from Jira.");
+    }
 
     var existingByIssueKey = loadResult.Documents.Values
       .Where(document => !string.IsNullOrWhiteSpace(document.JiraIssueKey))
@@ -130,6 +158,12 @@ public sealed class SyncExecutor(
     foreach (ArtifactDocument document in refreshedLoadResult.Documents.Values.OrderBy(x => x.Path, StringComparer.OrdinalIgnoreCase))
     {
       if (string.IsNullOrWhiteSpace(document.JiraIssueKey))
+      {
+        continue;
+      }
+
+      if (normalizedIssueFilter is not null &&
+          !string.Equals(document.JiraIssueKey, normalizedIssueFilter, StringComparison.OrdinalIgnoreCase))
       {
         continue;
       }
@@ -221,11 +255,15 @@ public sealed class SyncExecutor(
     }
 
     progressSink.ReportStep($"Applied remote updates and recorded {conflictCount} conflict(s).");
-    string pullMessage = $"Pull complete. Imported {importedCount} new artifacts, updated {updatedCount} local artifacts, detected {conflictCount} conflicts.";
+    string scopeNote = normalizedIssueFilter is null ? string.Empty : $" (issue {normalizedIssueFilter})";
+    string pullMessage =
+      $"Pull complete{scopeNote}. Imported {importedCount} new artifacts, updated {updatedCount} local artifacts, detected {conflictCount} conflicts.";
     progressSink.Complete(pullMessage);
     return CommandResult.Ok(
       pullMessage,
-      $"[INFO] Jira issues scanned: {remoteIssues.Count}",
+      normalizedIssueFilter is null
+        ? $"[INFO] Jira issues scanned: {remoteIssues.Count}"
+        : $"[INFO] Jira issue fetched: {normalizedIssueFilter}",
       $"[INFO] Imported artifacts: {importedCount}",
       $"[INFO] Updated artifacts: {updatedCount}",
       conflictCount == 0
@@ -233,7 +271,7 @@ public sealed class SyncExecutor(
         : $"[WARN] Pull conflicts recorded: {conflictCount}");
   }
 
-  public async Task<CommandResult> PushAsync(bool dryRun, CancellationToken cancellationToken)
+  public async Task<CommandResult> PushAsync(bool dryRun, CancellationToken cancellationToken, string? issueKeyFilter = null)
   {
     cancellationToken.ThrowIfCancellationRequested();
     progressSink.Start(
@@ -281,13 +319,54 @@ public sealed class SyncExecutor(
     }
     progressSink.ReportStep($"Using project '{jiraConfiguration.ProjectKey}' metadata for validation.");
 
+    bool backlogUsesSprintFolders = loadResult.Documents.Keys.Any(path =>
+      !string.IsNullOrWhiteSpace(SprintPathConvention.TryExtractSprintDirectorySegment(path, loadResult.BacklogRoot)));
+    if (repositorySettings.SprintMappingEnabled &&
+        (jiraConfiguration.Sprints?.Count ?? 0) == 0 &&
+        backlogUsesSprintFolders)
+    {
+      progressSink.ReportStep(
+        "[WARN] Issues are under sprint-* folders but Jira returned no sprints; sprint field will be omitted until boards/sprints load correctly.");
+    }
+
     JiraSettings settings = JiraSettingsLoader.LoadFromEnvironment(repoRoot);
     List<ArtifactDocument> orderedDocuments = PlanBuilder.OrderDocuments(loadResult.Documents.Values.ToList());
-    var runtimeIssueKeys = orderedDocuments
+
+    string? normalizedIssueFilter = null;
+    if (!string.IsNullOrWhiteSpace(issueKeyFilter))
+    {
+      normalizedIssueFilter = issueKeyFilter.Trim();
+      if (!JiraIssueKeyFormat.TryParseNumericSuffix(normalizedIssueFilter, jiraConfiguration.ProjectKey, out _))
+      {
+        progressSink.Fail(
+          $"Issue key '{normalizedIssueFilter}' does not match configured project '{jiraConfiguration.ProjectKey}'.");
+        return CommandResult.Fail(
+          $"Issue key '{normalizedIssueFilter}' does not match configured project '{jiraConfiguration.ProjectKey}'.");
+      }
+
+      orderedDocuments = orderedDocuments
+        .Where(document =>
+          string.Equals(document.JiraIssueKey, normalizedIssueFilter, StringComparison.OrdinalIgnoreCase))
+        .ToList();
+
+      if (orderedDocuments.Count == 0)
+      {
+        progressSink.Fail($"No local artifact is linked to issue '{normalizedIssueFilter}'.");
+        return CommandResult.Fail(
+          $"No local artifact is linked to issue '{normalizedIssueFilter}'.",
+          "Use the full push flow for artifacts without a Jira Issue Key, or link the artifact first.");
+      }
+
+      progressSink.ReportStep($"Scoped push to issue '{normalizedIssueFilter}'.");
+    }
+
+    var runtimeIssueKeys = loadResult.Documents.Values
       .Where(document => !string.IsNullOrWhiteSpace(document.JiraIssueKey))
       .ToDictionary(document => document.Path, document => document.JiraIssueKey!, StringComparer.OrdinalIgnoreCase);
 
     using JiraApiClient client = jiraApiClientFactory.Create(settings);
+
+    RepositoryJiraConfiguration projectConfiguration = jiraConfiguration;
 
     List<PushCandidate> candidates = await BuildCandidatesAsync(
       orderedDocuments,
@@ -368,6 +447,8 @@ public sealed class SyncExecutor(
           createdIssueKey,
           candidate.LocalHash,
           ArtifactSyncStateService.ComputeRemoteFingerprint(createdIssue));
+        projectConfiguration =
+          BumpLastIssueNumberIfNeeded(repoRoot, repositorySettings, projectConfiguration, createdIssueKey);
       }
       else
       {
@@ -416,9 +497,11 @@ public sealed class SyncExecutor(
       }
     }
 
+    string scopeSuffix = normalizedIssueFilter is null ? string.Empty : $" (issue {normalizedIssueFilter})";
+
     string message = dryRun
-      ? $"Push dry-run complete. Actionable artifacts: {actionableCandidates.Count}. Conflicts: {conflicts.Count}."
-      : $"Push complete. Updated artifacts: {actionableCandidates.Count}. Conflicts: {conflicts.Count}.";
+      ? $"Push dry-run complete{scopeSuffix}. Actionable artifacts: {actionableCandidates.Count}. Conflicts: {conflicts.Count}."
+      : $"Push complete{scopeSuffix}. Updated artifacts: {actionableCandidates.Count}. Conflicts: {conflicts.Count}.";
     progressSink.ReportStep(dryRun
       ? "Dry-run completed without mutating Jira."
       : "Push write operations completed.");
@@ -426,7 +509,9 @@ public sealed class SyncExecutor(
 
     string[] details =
     [
-      $"[INFO] Artifacts evaluated: {candidates.Count}",
+      normalizedIssueFilter is null
+        ? $"[INFO] Artifacts evaluated: {candidates.Count}"
+        : $"[INFO] Artifacts evaluated: {candidates.Count} (scoped to {normalizedIssueFilter})",
       $"[INFO] Creates: {createCount}",
       $"[INFO] Updates: {updateCount}",
       $"[INFO] Unchanged: {skippedCount}",
@@ -614,6 +699,28 @@ public sealed class SyncExecutor(
     }
 
     return candidates;
+  }
+
+  private static RepositoryJiraConfiguration BumpLastIssueNumberIfNeeded(
+    string repoRoot,
+    RepositorySettings settings,
+    RepositoryJiraConfiguration configuration,
+    string issueKey)
+  {
+    if (!JiraIssueKeyFormat.TryParseNumericSuffix(issueKey, configuration.ProjectKey, out int n))
+    {
+      return configuration;
+    }
+
+    int current = configuration.LastIssueNumber ?? 0;
+    if (n <= current)
+    {
+      return configuration;
+    }
+
+    RepositoryJiraConfiguration updated = configuration with { LastIssueNumber = n };
+    RepositoryJiraConfigurationStore.Save(repoRoot, settings, updated);
+    return updated;
   }
 
   private static void PersistSyncState(

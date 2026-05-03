@@ -45,7 +45,9 @@ public static class AppHostBuilder
     builder.Services.AddSingleton<ValidationScreen>();
     builder.Services.AddSingleton<ValidationViewModel>();
     builder.Services.AddSingleton<PushScreen>();
+    builder.Services.AddSingleton<PushIssueScreen>();
     builder.Services.AddSingleton<PullScreen>();
+    builder.Services.AddSingleton<PullIssueScreen>();
     builder.Services.AddSingleton<ConflictsScreen>();
     builder.Services.AddSingleton<ResolveConflictScreen>();
 

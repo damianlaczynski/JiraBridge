@@ -582,6 +582,13 @@ public sealed class SyncExecutorTests
     Assert.Contains("- Jira Issue Key: SCRUM-88", content);
     Assert.Matches("(?s)Jira Last Synced Local Hash: [A-F0-9]{64}", content);
     Assert.Matches("(?s)Jira Last Synced Remote Hash: [A-F0-9]{64}", content);
+
+    RepositorySettings? settings = RepositorySettingsStore.TryLoad(repoRoot, out string? settingsErr);
+    Assert.Null(settingsErr);
+    RepositoryJiraConfiguration? meta = RepositoryJiraConfigurationStore.TryLoad(repoRoot, settings!, out string? metaErr);
+    Assert.Null(metaErr);
+    Assert.NotNull(meta);
+    Assert.Equal(88, meta!.LastIssueNumber);
   }
 
   [Fact]

@@ -23,4 +23,24 @@ public sealed class PathResolverTests
     Assert.Throws<InvalidOperationException>(() =>
       PathResolver.ResolveRepoRelativePath(repoRoot, "..\\outside.json"));
   }
+
+  [Fact]
+  public void AreRepositoryRelativePathsEqual_IgnoresSlashDirectionAndLeadingDots()
+  {
+    Assert.True(PathResolver.AreRepositoryRelativePathsEqual(
+      @"docs\jira-bridge\a.md",
+      "docs/jira-bridge/a.md"));
+
+    Assert.True(PathResolver.AreRepositoryRelativePathsEqual(
+      "./docs/jira-bridge/a.md",
+      @"docs\jira-bridge\a.md"));
+  }
+
+  [Fact]
+  public void AreRepositoryRelativePathsEqual_ReturnsFalseWhenSegmentsDiffer()
+  {
+    Assert.False(PathResolver.AreRepositoryRelativePathsEqual(
+      "docs/jira-bridge/a.md",
+      "docs/jira-bridge/b.md"));
+  }
 }

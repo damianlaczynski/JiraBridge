@@ -181,6 +181,78 @@ public sealed class ConflictResolverTests
   }
 
   [Fact]
+  public async Task ResolveAsync_FindsArtifactWhenConflictPathUsesForwardSlashes()
+  {
+    string repoRoot = CreateRepositoryRoot();
+    PrepareRepository(repoRoot);
+    string artifactPath = CreateArtifact(
+      repoRoot,
+      "story.md",
+      """
+      # Local story
+
+      ## Metadata
+
+      - Issue Type: Story
+      - Jira Issue Key: SCRUM-2
+      - Jira Last Synced Local Hash:
+      - Jira Last Synced Remote Hash:
+
+      ## Links
+
+      - Parent: none
+
+      ## Relations
+
+      ### Relates
+
+      - none
+
+      ## Description
+
+      Local body.
+      """);
+
+    using var scope = CreateScope(repoRoot);
+    ConflictStore.Record(
+      repoRoot,
+      new ConflictRecord(
+        "SCRUM-2",
+        "docs/jira-bridge/backlog/story.md",
+        "pull",
+        "Local story",
+        "Story",
+        "L",
+        "R",
+        "details"));
+
+    var handler = new StubHttpMessageHandler((request, _) =>
+    {
+      return StubHttpMessageHandler.Json(
+        """
+        {
+          "key":"SCRUM-2",
+          "fields":{
+            "summary":"Remote story",
+            "description":{"type":"doc","version":1,"content":[{"type":"paragraph","content":[{"type":"text","text":"Remote body."}]}]},
+            "issuetype":{"name":"Story"},
+            "status":{"name":"In Progress"},
+            "updated":"2026-05-01T10:15:00.000+0000",
+            "issuelinks":[]
+          }
+        }
+        """);
+    });
+
+    var resolver = new ConflictResolver(new StubJiraApiClientFactory(handler), new LocalFixtureMetadataRefresher());
+
+    CommandResult result = await resolver.ResolveAsync("SCRUM-2", ConflictResolutionStrategy.Jira, CancellationToken.None);
+
+    Assert.True(result.Success);
+    Assert.Empty(ConflictFileStore.Load(repoRoot));
+  }
+
+  [Fact]
   public void BuildMergedDescription_WhenBothSidesDiffer_AddsConflictMarkers()
   {
     ArtifactDocument document = new()

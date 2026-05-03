@@ -97,3 +97,7 @@ TestResults/
 *.db
 *.sqlite
 *.sqlite3
+
+# JiraBridge
+.jirabridge/
+docs/jira-bridge/

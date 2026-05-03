@@ -3,6 +3,7 @@ using System.Net.Http;
 using System.Text;
 using JiraBridge.Application.Abstractions;
 using JiraBridge.Application.Common;
+using JiraBridge.Domain.Configuration;
 using JiraBridge.Domain.Sync;
 using JiraBridge.Host.Terminal;
 using JiraBridge.Infrastructure.Environment;
@@ -62,6 +63,13 @@ public sealed class InteractiveWorkflowSmokeTests
             }
           }
           """),
+        "/rest/api/3/search/jql" when request.Method == HttpMethod.Post => StubHttpMessageHandler.Json(
+          """
+          {
+            "issues":[{"key":"SCRUM-2","fields":{}}],
+            "isLast":true
+          }
+          """),
         "/rest/api/3/issue/SCRUM-2" when request.Method == HttpMethod.Put => CaptureNoContent(request, captured => updateBody = captured),
         _ => new HttpResponseMessage(HttpStatusCode.NotFound) { Content = new StringContent("missing") }
       };
@@ -77,6 +85,14 @@ public sealed class InteractiveWorkflowSmokeTests
 
     Assert.True(configure.Success);
     Assert.Contains("Repository configuration saved", configure.Message);
+    RepositorySettings? configuredSettings = RepositorySettingsStore.TryLoad(repoRoot, out string? settingsLoadError);
+    Assert.Null(settingsLoadError);
+    Assert.NotNull(configuredSettings);
+    RepositoryJiraConfiguration? configuredMetadata =
+      RepositoryJiraConfigurationStore.TryLoad(repoRoot, configuredSettings, out string? metadataLoadError);
+    Assert.Null(metadataLoadError);
+    Assert.NotNull(configuredMetadata);
+    Assert.Equal(2, configuredMetadata!.LastIssueNumber);
     Assert.True(File.Exists(Path.Combine(repoRoot, ".jirabridge", "settings.json")));
     Assert.True(File.Exists(Path.Combine(repoRoot, ".jirabridge", "project-metadata.json")));
 

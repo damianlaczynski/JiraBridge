@@ -36,6 +36,12 @@ public sealed class RepositoryMetadataRefresher(
       ? "Loaded link types, workflow statuses, and sprint metadata."
       : "Loaded link types and workflow statuses.");
 
+    RepositoryJiraConfiguration? previous =
+      RepositoryJiraConfigurationStore.TryLoad(repoRoot, repositorySettings, out _);
+
+    int? fromRemote = await client.TryComputeMaxIssueNumericSuffixAsync(projectInfo.Key, cancellationToken).ConfigureAwait(false);
+    int? mergedLast = JiraIssueKeyFormat.MergeNullableMax(previous?.LastIssueNumber, fromRemote);
+
     var configuration = new RepositoryJiraConfiguration(
       ProjectKey: projectInfo.Key,
       ProjectId: projectInfo.Id,
@@ -45,7 +51,8 @@ public sealed class RepositoryMetadataRefresher(
       LinkTypes: linkTypes.ToList(),
       IssueTypeStatuses: issueTypeStatuses.ToList(),
       SprintFieldId: sprintFieldId,
-      Sprints: sprints);
+      Sprints: sprints,
+      LastIssueNumber: mergedLast);
 
     RepositoryJiraConfigurationStore.Save(repoRoot, repositorySettings, configuration);
     return configuration;

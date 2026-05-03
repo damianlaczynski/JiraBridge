@@ -21,7 +21,9 @@ public sealed class InteractiveShellController(
   ConfigurationScreen configurationScreen,
   ValidationScreen validationScreen,
   PushScreen pushScreen,
+  PushIssueScreen pushIssueScreen,
   PullScreen pullScreen,
+  PullIssueScreen pullIssueScreen,
   ConflictsScreen conflictsScreen,
   ResolveConflictScreen resolveConflictScreen,
   ScreenRenderer screenRenderer,
@@ -48,10 +50,13 @@ public sealed class InteractiveShellController(
   private int selectedConflictIndex;
   private int selectedStrategyIndex;
   private bool pushDryRunMode;
+  private string scopedPushIssueKey = string.Empty;
+  private string scopedPullIssueKey = string.Empty;
   private string progressIndicator = "[..]";
   private string screenMessage = string.Empty;
   private string[] screenDetails = [];
   private static readonly string[] SpinnerFrames = ["[|]", "[/]", "[-]", "[\\]"];
+  private const int MaxConflictDetailLines = 120;
 
   public void Initialize()
   {
@@ -67,6 +72,8 @@ public sealed class InteractiveShellController(
     {
       HomeScreen when isEditingHomeFilter => BuildInputCursorPlacement("Filter: ", commandFilter, lineIndex: 6),
       ConfigurationScreen => BuildInputCursorPlacement("Project key: ", configurationProjectKey, lineIndex: 4),
+      PushIssueScreen => BuildInputCursorPlacement("Issue key: ", scopedPushIssueKey, lineIndex: 4),
+      PullIssueScreen => BuildInputCursorPlacement("Issue key: ", scopedPullIssueKey, lineIndex: 2),
       _ => new CursorPlacement(IsVisible: false, Left: 0, Top: 0)
     };
   }
@@ -79,7 +86,9 @@ public sealed class InteractiveShellController(
       ConfigurationScreen => BuildConfigurationLines(),
       ValidationScreen => BuildResultLines("Run validation against local artifacts and Jira metadata."),
       PushScreen => BuildPushLines(),
+      PushIssueScreen => BuildPushIssueLines(),
       PullScreen => BuildResultLines("Import Jira changes into repository artifacts."),
+      PullIssueScreen => BuildPullIssueLines(),
       ConflictsScreen => BuildConflictsLines(),
       ResolveConflictScreen => BuildResolveLines(),
       _ => ["Unknown screen."]
@@ -96,6 +105,16 @@ public sealed class InteractiveShellController(
     if (menuNavigator.Current is ConfigurationScreen)
     {
       return await HandleConfigurationKeyAsync(key, cancellationToken);
+    }
+
+    if (menuNavigator.Current is PushIssueScreen)
+    {
+      return await HandlePushIssueKeyAsync(cancellationToken, key);
+    }
+
+    if (menuNavigator.Current is PullIssueScreen)
+    {
+      return await HandlePullIssueKeyAsync(cancellationToken, key);
     }
 
     if (menuNavigator.Current is ConflictsScreen)
@@ -123,27 +142,111 @@ public sealed class InteractiveShellController(
       case ConsoleKey.Escape:
         ReturnHome();
         return true;
-      case ConsoleKey.D:
-        pushDryRunMode = true;
-        await ExecuteCommandResultAsync(
-          pushScreen,
-          () => pushHandler.HandleAsync(new PushChangesCommand(DryRun: true), cancellationToken),
-          fallbackOperationName: "Push Dry-Run");
+      case ConsoleKey.Tab:
+        pushDryRunMode = !pushDryRunMode;
         return true;
-      case ConsoleKey.R:
+      case ConsoleKey.UpArrow:
+        pushDryRunMode = false;
+        return true;
+      case ConsoleKey.DownArrow:
+        pushDryRunMode = true;
+        return true;
+      case ConsoleKey.Enter:
         await ExecuteCommandResultAsync(
           pushScreen,
           () => pushHandler.HandleAsync(new PushChangesCommand(DryRun: pushDryRunMode), cancellationToken),
           fallbackOperationName: pushDryRunMode ? "Push Dry-Run" : "Push");
         return true;
-      case ConsoleKey.Enter:
+      default:
+        return true;
+    }
+  }
+
+  private async Task<bool> HandlePushIssueKeyAsync(CancellationToken cancellationToken, ConsoleKeyInfo key)
+  {
+    switch (key.Key)
+    {
+      case ConsoleKey.Escape:
+        ReturnHome();
+        return true;
+      case ConsoleKey.Backspace:
+        if (scopedPushIssueKey.Length > 0)
+        {
+          scopedPushIssueKey = scopedPushIssueKey[..^1];
+        }
+
+        return true;
+      case ConsoleKey.Tab:
+        pushDryRunMode = !pushDryRunMode;
+        return true;
+      case ConsoleKey.UpArrow:
         pushDryRunMode = false;
+        return true;
+      case ConsoleKey.DownArrow:
+        pushDryRunMode = true;
+        return true;
+      case ConsoleKey.Enter:
+        return await TryExecuteScopedPushAsync(dryRun: pushDryRunMode, cancellationToken);
+      default:
+        if (!char.IsControl(key.KeyChar))
+        {
+          scopedPushIssueKey += key.KeyChar;
+        }
+
+        return true;
+    }
+  }
+
+  private async Task<bool> TryExecuteScopedPushAsync(bool dryRun, CancellationToken cancellationToken)
+  {
+    if (string.IsNullOrWhiteSpace(scopedPushIssueKey))
+    {
+      screenMessage = "Enter a Jira issue key before pushing.";
+      screenDetails = [];
+      return true;
+    }
+
+    string trimmedKey = scopedPushIssueKey.Trim();
+    await ExecuteCommandResultAsync(
+      pushIssueScreen,
+      () => pushHandler.HandleAsync(new PushChangesCommand(DryRun: dryRun, IssueKey: trimmedKey), cancellationToken),
+      fallbackOperationName: dryRun ? "Push issue Dry-Run" : "Push issue");
+    return true;
+  }
+
+  private async Task<bool> HandlePullIssueKeyAsync(CancellationToken cancellationToken, ConsoleKeyInfo key)
+  {
+    switch (key.Key)
+    {
+      case ConsoleKey.Escape:
+        ReturnHome();
+        return true;
+      case ConsoleKey.Backspace:
+        if (scopedPullIssueKey.Length > 0)
+        {
+          scopedPullIssueKey = scopedPullIssueKey[..^1];
+        }
+
+        return true;
+      case ConsoleKey.Enter:
+        if (string.IsNullOrWhiteSpace(scopedPullIssueKey))
+        {
+          screenMessage = "Enter a Jira issue key before pulling.";
+          screenDetails = [];
+          return true;
+        }
+
+        string trimmedKey = scopedPullIssueKey.Trim();
         await ExecuteCommandResultAsync(
-          pushScreen,
-          () => pushHandler.HandleAsync(new PushChangesCommand(DryRun: false), cancellationToken),
-          fallbackOperationName: "Push");
+          pullIssueScreen,
+          () => pullHandler.HandleAsync(new PullChangesCommand(IssueKey: trimmedKey), cancellationToken));
         return true;
       default:
+        if (!char.IsControl(key.KeyChar))
+        {
+          scopedPullIssueKey += key.KeyChar;
+        }
+
         return true;
     }
   }
@@ -348,13 +451,26 @@ public sealed class InteractiveShellController(
         return true;
       case "push":
         menuNavigator.SetCurrent(pushScreen);
-        screenMessage = "Choose Enter for push or D for dry-run preview.";
+        screenMessage = "Arrow keys or Tab choose the push mode, Enter runs.";
+        screenDetails = [];
+        return true;
+      case "push-issue":
+        scopedPushIssueKey = string.Empty;
+        pushDryRunMode = false;
+        menuNavigator.SetCurrent(pushIssueScreen);
+        screenMessage = "Enter the issue key. Arrow keys or Tab choose mode, Enter runs.";
         screenDetails = [];
         return true;
       case "pull":
         await ExecuteCommandResultAsync(
           pullScreen,
           () => pullHandler.HandleAsync(new PullChangesCommand(), cancellationToken));
+        return true;
+      case "pull-issue":
+        scopedPullIssueKey = string.Empty;
+        menuNavigator.SetCurrent(pullIssueScreen);
+        screenMessage = "Enter the issue key (e.g. SCRUM-21), then Enter to pull.";
+        screenDetails = [];
         return true;
       case "conflicts":
         await LoadConflictsAsync(cancellationToken);
@@ -496,12 +612,51 @@ public sealed class InteractiveShellController(
   {
     var lines = new List<string>
     {
-      "[TIP] Enter: run push",
-      "[TIP] D: dry-run preview",
-      "[TIP] R: repeat the last push mode",
-      "[TIP] Esc: home",
+      "[TIP] Arrow keys: choose mode",
+      "[TIP] Tab: toggle mode",
+      "[TIP] Enter: run | Esc: home",
       string.Empty,
-      $"Selected mode: {(pushDryRunMode ? "dry-run preview" : "apply Jira updates")}",
+      "Mode:",
+      $"{PushModeLineMarker(!pushDryRunMode)} Apply Jira updates",
+      $"{PushModeLineMarker(pushDryRunMode)} Dry-run preview",
+      string.Empty
+    };
+
+    AppendProgress(lines);
+    AppendOutcome(lines);
+    return lines;
+  }
+
+  private static string PushModeLineMarker(bool selected) => selected ? ">" : " ";
+
+  private IReadOnlyList<string> BuildPushIssueLines()
+  {
+    var lines = new List<string>
+    {
+      "[TIP] Arrow keys / Tab: choose push mode",
+      "[TIP] Enter: run | Esc: home",
+      "[TIP] The artifact must already list a Jira Issue Key in Metadata.",
+      string.Empty,
+      $"Issue key: {scopedPushIssueKey}",
+      string.Empty,
+      "Mode:",
+      $"{PushModeLineMarker(!pushDryRunMode)} Apply Jira updates",
+      $"{PushModeLineMarker(pushDryRunMode)} Dry-run preview",
+      string.Empty
+    };
+
+    AppendProgress(lines);
+    AppendOutcome(lines);
+    return lines;
+  }
+
+  private IReadOnlyList<string> BuildPullIssueLines()
+  {
+    var lines = new List<string>
+    {
+      "[TIP] Enter: pull this issue from Jira | Esc: home",
+      string.Empty,
+      $"Issue key: {scopedPullIssueKey}",
       string.Empty
     };
 
@@ -546,18 +701,10 @@ public sealed class InteractiveShellController(
     if (!string.IsNullOrWhiteSpace(selected.Details))
     {
       lines.Add("[WARN] Diff preview:");
-      foreach (string line in selected.Details.Replace("\r\n", "\n", StringComparison.Ordinal).Split('\n'))
-      {
-        lines.Add(line);
-      }
+      AppendTruncatedDetailLines(lines, selected.Details);
     }
 
-    if (!string.IsNullOrWhiteSpace(screenMessage))
-    {
-      lines.Add(string.Empty);
-      lines.Add(screenMessage);
-    }
-
+    AppendOutcome(lines);
     return lines;
   }
 
@@ -598,11 +745,7 @@ public sealed class InteractiveShellController(
     if (!string.IsNullOrWhiteSpace(conflict.Details))
     {
       lines.Add("[WARN] Full diff:");
-      foreach (string line in conflict.Details.Replace("\r\n", "\n", StringComparison.Ordinal).Split('\n'))
-      {
-        lines.Add(line);
-      }
-
+      AppendTruncatedDetailLines(lines, conflict.Details);
       lines.Add(string.Empty);
     }
 
@@ -646,6 +789,23 @@ public sealed class InteractiveShellController(
     foreach (string detail in screenDetails)
     {
       lines.Add(detail);
+    }
+  }
+
+  private static void AppendTruncatedDetailLines(List<string> lines, string details)
+  {
+    string normalized = details.Replace("\r\n", "\n", StringComparison.Ordinal);
+    string[] split = normalized.Split('\n');
+    int total = split.Length;
+    int take = Math.Min(MaxConflictDetailLines, total);
+    for (int i = 0; i < take; i++)
+    {
+      lines.Add(split[i]);
+    }
+
+    if (total > MaxConflictDetailLines)
+    {
+      lines.Add($"[INFO] ... ({total - MaxConflictDetailLines} diff lines omitted — preview capped at {MaxConflictDetailLines})");
     }
   }
 

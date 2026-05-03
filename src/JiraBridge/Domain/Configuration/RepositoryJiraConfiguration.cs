@@ -9,7 +9,8 @@ public sealed record RepositoryJiraConfiguration(
   List<JiraLinkType> LinkTypes,
   List<JiraIssueTypeStatuses> IssueTypeStatuses,
   string? SprintFieldId = null,
-  List<JiraSprintInfo>? Sprints = null);
+  List<JiraSprintInfo>? Sprints = null,
+  int? LastIssueNumber = null);
 
 public sealed record JiraProjectIssueType(
   string Id,

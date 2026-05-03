@@ -54,8 +54,9 @@ public sealed class ConflictResolver(
     RepositoryJiraConfiguration jiraConfiguration = loadResult.JiraConfiguration
       ?? throw new InvalidOperationException("Missing project metadata after refresh.");
 
-    ArtifactDocument? document = loadResult.Documents.Values.FirstOrDefault(item =>
-      string.Equals(item.RelativePath(repoRoot), conflict.RelativePath, StringComparison.OrdinalIgnoreCase));
+    string normalizedRepoRoot = Path.GetFullPath(
+      loadResult.RepoRoot.TrimEnd(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar));
+    ArtifactDocument? document = FindDocumentForConflict(loadResult, normalizedRepoRoot, conflict.RelativePath);
 
     if (document is null)
     {
@@ -86,6 +87,43 @@ public sealed class ConflictResolver(
 
     ConflictStore.Clear(repoRoot, issueKey);
     return CommandResult.Ok($"Conflict '{issueKey}' resolved using '{strategy}'.");
+  }
+
+  private static ArtifactDocument? FindDocumentForConflict(
+    ArtifactLoadResult loadResult,
+    string normalizedRepoRoot,
+    string conflictRelativePath)
+  {
+    foreach (ArtifactDocument item in loadResult.Documents.Values)
+    {
+      if (PathResolver.AreRepositoryRelativePathsEqual(item.RelativePath(normalizedRepoRoot), conflictRelativePath))
+      {
+        return item;
+      }
+    }
+
+    try
+    {
+      string candidateAbsolute = PathResolver.ResolveRepoRelativePath(normalizedRepoRoot, conflictRelativePath);
+      if (loadResult.Documents.TryGetValue(candidateAbsolute, out ArtifactDocument? hit))
+      {
+        return hit;
+      }
+
+      string candidateFull = Path.GetFullPath(candidateAbsolute);
+      foreach (ArtifactDocument doc in loadResult.Documents.Values)
+      {
+        if (string.Equals(Path.GetFullPath(doc.Path), candidateFull, StringComparison.OrdinalIgnoreCase))
+        {
+          return doc;
+        }
+      }
+    }
+    catch (ArgumentException)
+    {
+    }
+
+    return null;
   }
 
   private static async Task ResolveWithRepositoryAsync(

@@ -293,6 +293,47 @@ public sealed class JiraApiClientTests
     Assert.Contains("\"key\":\"SCRUM-2\"", body);
   }
 
+  [Fact]
+  public async Task TryComputeMaxIssueNumericSuffixAsync_ReturnsMaxParsedSuffix()
+  {
+    var handler = new StubHttpMessageHandler((request, _) =>
+    {
+      Assert.Equal("/rest/api/3/search/jql", request.RequestUri!.PathAndQuery);
+      Assert.Equal(HttpMethod.Post, request.Method);
+      return StubHttpMessageHandler.Json(
+        """
+        {
+          "issues":[
+            {"key":"SCRUM-12","fields":{}},
+            {"key":"SCRUM-5","fields":{}}
+          ],
+          "isLast":true
+        }
+        """);
+    });
+
+    using var httpClient = new HttpClient(handler) { BaseAddress = new Uri("https://example.atlassian.net") };
+    using var client = new JiraApiClient(httpClient);
+
+    int? max = await client.TryComputeMaxIssueNumericSuffixAsync("SCRUM", CancellationToken.None);
+
+    Assert.Equal(12, max);
+  }
+
+  [Fact]
+  public async Task TryComputeMaxIssueNumericSuffixAsync_WhenIssuesEmpty_ReturnsNull()
+  {
+    var handler = new StubHttpMessageHandler((_, _) =>
+      StubHttpMessageHandler.Json("""{"issues":[],"isLast":true}"""));
+
+    using var httpClient = new HttpClient(handler) { BaseAddress = new Uri("https://example.atlassian.net") };
+    using var client = new JiraApiClient(httpClient);
+
+    int? max = await client.TryComputeMaxIssueNumericSuffixAsync("SCRUM", CancellationToken.None);
+
+    Assert.Null(max);
+  }
+
   private static HttpResponseMessage CreateIssueResponse(HttpRequestMessage request, Action<string> capture)
   {
     capture(request.Content!.ReadAsStringAsync().GetAwaiter().GetResult());
