@@ -13,8 +13,8 @@
     <Authors>Damian Łączyński</Authors>
     <Description>Interactive CLI for syncing a Git-hosted markdown backlog with Jira (pull, push, validate, conflicts).</Description>
     <PackageTags>jira;cli;dotnet-tool;sync;backlog;interactive</PackageTags>
-    <PackageProjectUrl>https://github.com/DamianLaczynski/JiraBridge</PackageProjectUrl>
-    <RepositoryUrl>https://github.com/DamianLaczynski/JiraBridge.git</RepositoryUrl>
+    <PackageProjectUrl>https://github.com/damianlaczynski/JiraBridge</PackageProjectUrl>
+    <RepositoryUrl>https://github.com/damianlaczynski/JiraBridge.git</RepositoryUrl>
     <RepositoryType>git</RepositoryType>
     <PackageLicenseExpression>MIT</PackageLicenseExpression>
     <Copyright>Copyright (c) 2026 Damian Łączyński</Copyright>
