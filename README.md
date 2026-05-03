@@ -2,15 +2,17 @@
 
 Interactive .NET CLI that synchronizes a **Git repository’s markdown backlog** with **Jira** (pull/push, validation, conflicts). The UI is keyboard-driven: command palette, screens per workflow, and explicit dry-run for pushes.
 
+Extended instructions for users (environment, API token, workflows, troubleshooting) are in **[docs/user-guide.md](docs/user-guide.md)**.
+
 ## Prerequisites
 
 - **Git**: Run inside a clone; the tool resolves the repo root by walking up to a `.git` directory.
-- **.NET**: Matches the app target (`net10.0` today). For the global tool, install a compatible .NET SDK/runtime as required by the shipped package.
-- **Terminal**: Interactive stdin is required. If stdin is redirected, the app renders once and exits (no unattended/CI mode yet).
+- **.NET**: Use a .NET SDK/runtime compatible with the tool target (`net10.0` today).
+- **Terminal**: Interactive stdin is required. If stdin is redirected, the app renders once and exits.
 
 ## Install
 
-### From NuGet (recommended after publish)
+### From NuGet
 
 ```powershell
 dotnet tool install --global JiraBridge
@@ -24,13 +26,7 @@ Update:
 dotnet tool update --global JiraBridge
 ```
 
-### From a local `.nupkg` (pre-release testing)
-
-```powershell
-dotnet tool install --global JiraBridge --add-source C:\path\to\folder\containing\nupkg
-```
-
-### From source (contributors)
+### From source
 
 ```powershell
 dotnet build JiraBridge.sln
@@ -77,7 +73,7 @@ Filter with the keyboard; **Enter** runs or opens a screen; **Esc** / **Q** as s
 | `conflicts` | List sync conflicts |
 | `resolve` | Resolve selected conflict (repository / Jira / merge strategies) |
 
-There is **no** separate non-interactive CLI for these verbs today; the maintained surface is this interactive app.
+All of these run inside the interactive UI only; the `jirabridge` executable does not take subcommands like `pull` or `configure` on the command line.
 
 ## Repository layout (defaults)
 
@@ -95,23 +91,6 @@ There is **no** separate non-interactive CLI for these verbs today; the maintain
 - Push with dry-run and step-by-step progress  
 - Pull from Jira into repo artifacts  
 - Conflict listing, diff preview, interactive resolve strategies  
-- Tests: parser, domain defaults, fixture-style backlog scenarios  
-
-## Distribution choice
-
-**Recommended:** publish **`JiraBridge`** as a **.NET global tool** on **[NuGet.org](https://www.nuget.org/)** (`PackAsTool`, command `jirabridge`). Same package works on Windows, Linux, and macOS with a suitable .NET runtime.
-
-**Alternatives:** private NuGet feed, GitHub Releases attaching `.nupkg`, or documentation-only install-from-source. Container images are optional and not required for a CLI tool.
-
-## Documentation map
-
-| Doc | Audience |
-|-----|----------|
-| [docs/user-guide.md](docs/user-guide.md) | End users: install, env, workflows, troubleshooting |
-| [AGENTS.md](AGENTS.md) | Contributors & AI agents: build commands, layout |
-| [docs/repo-map.md](docs/repo-map.md) | Where code lives |
-| [docs/backend-coding-guidelines.md](docs/backend-coding-guidelines.md) | Implementation conventions |
-| [docs/testing-playbook.md](docs/testing-playbook.md) | How to test |
 
 ## License
 

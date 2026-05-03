@@ -7,13 +7,13 @@ This document covers end-to-end usage: installation, first run, Jira setup, and 
 | Requirement | Details |
 |-------------|---------|
 | Git repository | The tool walks up from the current working directory until it finds a `.git` directory. Run it **inside your clone**, not from an arbitrary folder. |
-| .NET | For the **global tool** (`dotnet tool`), you need a runtime/SDK compatible with the target framework used to build the package (currently `net10.0`). From source: .NET 10 SDK installed. |
+| .NET | For **`dotnet tool`**, use a runtime/SDK compatible with this release (`net10.0` today). To run from source you need the .NET 10 SDK. |
 | Jira (HTTPS) | Uses the REST API; base URL must be **HTTPS** (e.g. `https://your-company.atlassian.net`). Authentication: Atlassian account **email + API token** (HTTP Basic). |
-| Interactive terminal | Keyboard-driven UI (arrows, Enter, Esc). If **stdin is redirected** (non-interactive), the app renders once and exits — not suitable for CI until a non-interactive mode exists. |
+| Interactive terminal | Keyboard-driven UI (arrows, Enter, Esc). If **stdin is redirected** (non-interactive), the app renders once and exits. |
 
 ## Installation
 
-### From NuGet.org (after the package is published)
+### From NuGet
 
 ```powershell
 dotnet tool install --global JiraBridge
@@ -25,15 +25,9 @@ Update:
 dotnet tool update --global JiraBridge
 ```
 
-Console command after install: **`jirabridge`** (see `ToolCommandName` in the project file).
+Console command after install: **`jirabridge`**.
 
-### From a local `.nupkg` (pre-publish testing)
-
-```powershell
-dotnet tool install --global JiraBridge --add-source C:\path\to\folder\with\nupkg --prerelease
-```
-
-### From source (contributors)
+### From source
 
 From the repository root:
 
@@ -132,9 +126,3 @@ Home screen: arrows navigate, type to filter, **Esc** clears filter, **Q** quits
 | “JIRABRIDGE_JIRA_BASE_URL must be … HTTPS” | Used `http://` or an invalid URL. |
 | No interaction / immediate exit | Stdin redirected; use an interactive terminal. |
 | Jira API errors | Wrong token, revoked token, missing project access, or rate limits — the message usually includes HTTP status and part of the response body. |
-
-## Distribution notes
-
-For a .NET CLI, the usual distribution is a **`dotnet tool`** package on **NuGet.org** (`JiraBridge`, command `jirabridge`). Alternatives: GitHub Releases with a `.nupkg`, or an internal feed (`dotnet tool install --add-source ...`).
-
-Bump **`PackageVersion`** in `src/JiraBridge/JiraBridge.csproj` before each publish.
