@@ -1,0 +1,33 @@
+{
+  "version": "0.2.0",
+  "compounds": [
+    {
+      "name": "JiraBridge Full Stack",
+      "configurations": ["JiraBridge Backend", "JiraBridge Frontend"]
+    }
+  ],
+  "configurations": [
+    {
+      "name": "JiraBridge Backend",
+      "type": "coreclr",
+      "request": "launch",
+      "preLaunchTask": "jirabridge-backend: build solution",
+      "program": "${workspaceFolder}/src/JiraBridge.Backend/src/JiraBridge.Backend.Web/bin/Debug/net10.0/JiraBridge.Backend.Web.dll",
+      "args": [],
+      "cwd": "${workspaceFolder}/src/JiraBridge.Backend/src/JiraBridge.Backend.Web",
+      "console": "integratedTerminal",
+      "stopAtEntry": false,
+      "env": {
+        "ASPNETCORE_ENVIRONMENT": "Development",
+        "ASPNETCORE_URLS": "http://localhost:5000"
+      }
+    },
+    {
+      "name": "JiraBridge Frontend",
+      "type": "node-terminal",
+      "request": "launch",
+      "command": "npm run start -- --host 0.0.0.0 --port 4200",
+      "cwd": "${workspaceFolder}/src/JiraBridge.Frontend"
+    }
+  ]
+}

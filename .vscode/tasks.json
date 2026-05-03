@@ -1,0 +1,190 @@
+{
+  "version": "2.0.0",
+  "tasks": [
+    {
+      "label": "jirabridge-frontend: serve",
+      "type": "process",
+      "command": "npm",
+      "args": ["run", "start", "--", "--host", "0.0.0.0", "--port", "4200"],
+      "options": {
+        "cwd": "${workspaceFolder}/src/JiraBridge.Frontend"
+      },
+      "isBackground": true,
+      "presentation": {
+        "reveal": "always",
+        "panel": "shared"
+      },
+      "problemMatcher": {
+        "owner": "custom",
+        "fileLocation": ["relative", "${workspaceFolder}"],
+        "pattern": {
+          "regexp": "."
+        },
+        "background": {
+          "activeOnStart": true,
+          "beginsPattern": ".",
+          "endsPattern": "Application bundle generation complete"
+        }
+      }
+    },
+    {
+      "label": "jirabridge-frontend: build",
+      "type": "process",
+      "command": "npm",
+      "args": ["run", "build"],
+      "options": {
+        "cwd": "${workspaceFolder}/src/JiraBridge.Frontend"
+      },
+      "group": "build",
+      "presentation": {
+        "reveal": "silent",
+        "panel": "shared"
+      }
+    },
+    {
+      "label": "jirabridge-frontend: lint",
+      "type": "process",
+      "command": "npm",
+      "args": ["run", "lint"],
+      "options": {
+        "cwd": "${workspaceFolder}/src/JiraBridge.Frontend"
+      },
+      "presentation": {
+        "reveal": "silent",
+        "panel": "shared"
+      }
+    },
+    {
+      "label": "jirabridge-frontend: format",
+      "type": "process",
+      "command": "npm",
+      "args": ["run", "format"],
+      "options": {
+        "cwd": "${workspaceFolder}/src/JiraBridge.Frontend"
+      },
+      "presentation": {
+        "reveal": "silent",
+        "panel": "shared"
+      }
+    },
+    {
+      "label": "jirabridge-frontend: format check",
+      "type": "process",
+      "command": "npm",
+      "args": ["run", "format:check"],
+      "options": {
+        "cwd": "${workspaceFolder}/src/JiraBridge.Frontend"
+      },
+      "presentation": {
+        "reveal": "silent",
+        "panel": "shared"
+      }
+    },
+    {
+      "label": "jirabridge-backend: build",
+      "command": "dotnet",
+      "type": "process",
+      "args": [
+        "build",
+        "${workspaceFolder}/src/JiraBridge.Backend/src/JiraBridge.Backend.Web/JiraBridge.Backend.Web.csproj",
+        "/property:GenerateFullPaths=true",
+        "/consoleloggerparameters:NoSummary;ForceNoAlign"
+      ],
+      "options": {
+        "cwd": "${workspaceFolder}/src/JiraBridge.Backend/src/JiraBridge.Backend.Web"
+      },
+      "group": "build",
+      "presentation": {
+        "reveal": "silent",
+        "panel": "shared"
+      },
+      "problemMatcher": "$msCompile"
+    },
+    {
+      "label": "jirabridge-backend: build solution",
+      "command": "dotnet",
+      "type": "process",
+      "args": [
+        "build",
+        "${workspaceFolder}/src/JiraBridge.Backend/JiraBridge.Backend.sln",
+        "/property:GenerateFullPaths=true",
+        "/consoleloggerparameters:NoSummary;ForceNoAlign"
+      ],
+      "options": {
+        "cwd": "${workspaceFolder}/src/JiraBridge.Backend"
+      },
+      "group": "build",
+      "presentation": {
+        "reveal": "silent",
+        "panel": "shared"
+      },
+      "problemMatcher": "$msCompile"
+    },
+    {
+      "label": "jirabridge-backend: format",
+      "type": "process",
+      "command": "dotnet",
+      "args": [
+        "format",
+        "${workspaceFolder}/src/JiraBridge.Backend/JiraBridge.Backend.sln"
+      ],
+      "options": {
+        "cwd": "${workspaceFolder}/src/JiraBridge.Backend"
+      },
+      "presentation": {
+        "reveal": "silent",
+        "panel": "shared"
+      }
+    },
+    {
+      "label": "jirabridge-backend: format check",
+      "type": "process",
+      "command": "dotnet",
+      "args": [
+        "format",
+        "${workspaceFolder}/src/JiraBridge.Backend/JiraBridge.Backend.sln",
+        "--verify-no-changes"
+      ],
+      "options": {
+        "cwd": "${workspaceFolder}/src/JiraBridge.Backend"
+      },
+      "presentation": {
+        "reveal": "silent",
+        "panel": "shared"
+      }
+    },
+    {
+      "label": "jirabridge: lint all",
+      "dependsOrder": "sequence",
+      "dependsOn": ["jirabridge-frontend: lint"]
+    },
+    {
+      "label": "jirabridge: build all",
+      "dependsOrder": "sequence",
+      "dependsOn": [
+        "jirabridge-frontend: build",
+        "jirabridge-backend: build solution"
+      ],
+      "group": {
+        "kind": "build",
+        "isDefault": true
+      }
+    },
+    {
+      "label": "jirabridge: format all",
+      "dependsOrder": "sequence",
+      "dependsOn": ["jirabridge-frontend: format", "jirabridge-backend: format"]
+    },
+    {
+      "label": "jirabridge: verify all",
+      "dependsOrder": "sequence",
+      "dependsOn": [
+        "jirabridge-frontend: format check",
+        "jirabridge-frontend: lint",
+        "jirabridge-backend: format check",
+        "jirabridge-backend: build solution"
+      ],
+      "group": "test"
+    }
+  ]
+}
